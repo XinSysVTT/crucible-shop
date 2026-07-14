@@ -76,20 +76,16 @@ Hooks.once("ready", () => {
   Hooks.on("renderItemDirectory", (app, html) => {
     if (!game.user.isGM) return;
 
-    if (html.find(".crucible-shop-button").length) return;
+    const root = html instanceof HTMLElement ? html : html[0];
+    if (!root || root.querySelector(".crucible-shop-button")) return;
 
-    const button = $(`
-      <button type="button" class="crucible-shop-button">
-        <i class="fas fa-store"></i>
-        Shop Manager
-      </button>
-    `);
-
-    button.on("click", () => {
-      new CrucibleShopManagerApp().render(true);
-    });
-
-    html.find(".directory-header").append(button);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.classList.add("crucible-shop-button");
+    button.innerHTML = `<i class="fas fa-store"></i> ${game.i18n.localize("CRUCIBLE_SHOP.ManagerTitle")}`;
+    button.addEventListener("click", () => new CrucibleShopManagerApp().render({force: true}));
+    const actionButtons = root.querySelector(".action-buttons") ?? root.querySelector(".directory-header") ?? root;
+    actionButtons.append(button);
   });
 
   // Console/macro convenience.

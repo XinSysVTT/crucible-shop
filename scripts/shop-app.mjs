@@ -163,15 +163,13 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
   /* -------------------------------------------- */
 
   /** @override */
-  async _preFirstRender(context, options) {
-    await super._preFirstRender(context, options);
-    if ( !this.#initialized ) await this.#initializeCatalog();
-  }
-
-  /* -------------------------------------------- */
-
-  /** @override */
   async _prepareContext(_options) {
+    // Must happen here, not in _preFirstRender: ApplicationV2 calls _prepareContext BEFORE
+    // _preFirstRender, so loading the catalog there was always one render too late - the first
+    // paint would build its context from an empty item list, and only a subsequent render (e.g.
+    // clicking a filter) would pick up the loaded items.
+    if ( !this.#initialized ) await this.#initializeCatalog();
+
     const currency = this.actor.system.currency ?? 0;
     const cart = this._state.cart;
     const {type: filterType, category: filterCategory} = this._state.filter;
