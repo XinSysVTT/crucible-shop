@@ -1,0 +1,373 @@
+/* -------------------------------------------- */
+/*  Crucible Shop - Player App                   */
+/* -------------------------------------------- */
+
+.crucible-shop .window-content {
+  padding: 0;
+}
+
+.crucible-shop-button {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.crucible-shop .shop-app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0.5rem;
+  gap: 0.5rem;
+}
+
+.crucible-shop .shop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.crucible-shop .shop-search-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+}
+
+.crucible-shop .shop-search-wrapper input {
+  background: none;
+  border: none;
+  flex: 1;
+}
+
+.crucible-shop .shop-currency {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  color: var(--color-text-light-highlight, #f0d0a0);
+}
+
+.crucible-shop .shop-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.crucible-shop .shop-filters a {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.crucible-shop .shop-filters a.active {
+  background: var(--color-text-light-highlight, #a3612d);
+  color: #fff;
+}
+
+.crucible-shop .shop-body {
+  flex: 1;
+  display: flex;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.crucible-shop .shop-list {
+  flex: 3;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.crucible-shop .shop-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.crucible-shop .shop-entry.unaffordable {
+  opacity: 0.5;
+}
+
+.crucible-shop .shop-entry img {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.crucible-shop .shop-entry-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.crucible-shop .shop-entry-info .item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crucible-shop .item-tags {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.crucible-shop .item-tags .tag {
+  font-size: var(--font-size-11, 11px);
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.crucible-shop .item-tags .tag.unmet {
+  color: #d16565;
+}
+
+.crucible-shop .item-price {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.crucible-shop .item-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.crucible-shop .item-controls a {
+  cursor: pointer;
+}
+
+.crucible-shop .shop-cart {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  padding-left: 0.75rem;
+}
+
+.crucible-shop .shop-cart-list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.crucible-shop .cart-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.crucible-shop .cart-entry img {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+}
+
+.crucible-shop .cart-entry .item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crucible-shop .cart-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.crucible-shop .cart-actions button {
+  flex: 1;
+}
+
+.crucible-shop .shop-list .empty,
+.crucible-shop .shop-cart-list .empty {
+  opacity: 0.6;
+  font-style: italic;
+  text-align: center;
+}
+
+/* -------------------------------------------- */
+/*  Crucible Shop - Manager App                  */
+/* -------------------------------------------- */
+
+.crucible-shop-manager .window-content {
+  padding: 0;
+}
+
+.crucible-shop-manager-layout {
+  display: flex;
+  height: 100%;
+}
+
+.crucible-shop-manager .shop-list-panel {
+  flex: 1;
+  max-width: 220px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+  overflow-y: auto;
+}
+
+.crucible-shop-manager .create-shop {
+  margin-bottom: 0.5rem;
+}
+
+.crucible-shop-manager .shop-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.crucible-shop-manager .shop-list-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.crucible-shop-manager .shop-list-entry.active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.crucible-shop-manager .shop-list-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crucible-shop-manager .shop-list-mode {
+  font-size: var(--font-size-10, 10px);
+  opacity: 0.6;
+}
+
+.crucible-shop-manager .delete-shop {
+  opacity: 0.6;
+}
+
+.crucible-shop-manager .delete-shop:hover {
+  opacity: 1;
+  color: #d16565;
+}
+
+.crucible-shop-manager .shop-detail-panel {
+  flex: 3;
+  padding: 0.75rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.crucible-shop-manager .shop-detail-header {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.crucible-shop-manager .shop-detail-header .form-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.crucible-shop-manager .shop-item-drop {
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  padding: 0.5rem;
+  min-height: 120px;
+}
+
+.crucible-shop-manager .shop-item-drop .hint {
+  opacity: 0.7;
+  text-align: center;
+  font-style: italic;
+}
+
+.crucible-shop-manager .shop-manager-item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.crucible-shop-manager .shop-manager-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0.4rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+}
+
+.crucible-shop-manager .shop-manager-item img {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+}
+
+.crucible-shop-manager .shop-manager-item.missing {
+  color: #d16565;
+}
+
+.crucible-shop-manager .shop-manager-item .item-name {
+  flex: 1;
+}
+
+.crucible-shop-manager .shop-invite-panel {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.crucible-shop-manager .user-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.crucible-shop-manager .user-checklist .online {
+  color: #6bd16b;
+  font-size: 8px;
+  margin-left: 0.25rem;
+}

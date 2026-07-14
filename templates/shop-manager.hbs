@@ -1,0 +1,90 @@
+<div class="crucible-shop-manager-layout">
+
+  <aside class="shop-list-panel">
+    <button type="button" class="create-shop" data-action="createShop">
+      <i class="fa-solid fa-plus"></i> {{localize "CRUCIBLE_SHOP.NewShop"}}
+    </button>
+    <ol class="shop-list">
+      {{#each shops as |shop|}}
+      <li class="shop-list-entry {{#if shop.active}}active{{/if}}" data-shop-id="{{shop.id}}" data-action="selectShop">
+        <i class="fa-solid fa-coins"></i>
+        <span class="shop-list-name">{{shop.name}}</span>
+        <span class="shop-list-mode">{{#if (eq shop.mode "custom")}}{{localize "CRUCIBLE_SHOP.ModeCustomShort"}}{{else}}{{localize "CRUCIBLE_SHOP.ModeDefaultShort"}}{{/if}}</span>
+        {{#unless (eq shop.id "default")}}
+        <a class="delete-shop" data-action="deleteShop" data-shop-id="{{shop.id}}" data-tooltip="{{localize 'CRUCIBLE_SHOP.DeleteShop'}}">
+          <i class="fa-solid fa-trash"></i>
+        </a>
+        {{/unless}}
+      </li>
+      {{/each}}
+    </ol>
+  </aside>
+
+  <section class="shop-detail-panel">
+    {{#if selected}}
+
+    <div class="shop-detail-header">
+      <div class="form-group">
+        <label>{{localize "CRUCIBLE_SHOP.ShopName"}}</label>
+        <input type="text" class="shop-name-input" value="{{selected.name}}"/>
+      </div>
+      <div class="form-group">
+        <label>{{localize "CRUCIBLE_SHOP.Stock"}}</label>
+        <select class="shop-mode-select" {{#if isDefaultShop}}disabled{{/if}}>
+          <option value="default" {{#if (eq selected.mode "default")}}selected{{/if}}>{{localize "CRUCIBLE_SHOP.ModeDefault"}}</option>
+          <option value="custom" {{#if (eq selected.mode "custom")}}selected{{/if}}>{{localize "CRUCIBLE_SHOP.ModeCustom"}}</option>
+        </select>
+      </div>
+      <button type="button" class="preview-shop" data-action="openShop">
+        <i class="fa-solid fa-eye"></i> {{localize "CRUCIBLE_SHOP.Preview"}}
+      </button>
+    </div>
+
+    {{#if (eq selected.mode "custom")}}
+    <div class="shop-item-drop">
+      <p class="hint"><i class="fa-solid fa-hand-pointer"></i> {{localize "CRUCIBLE_SHOP.DropHint"}}</p>
+      <ol class="shop-manager-item-list">
+        {{#each items as |item|}}
+        <li class="shop-manager-item {{#if item.missing}}missing{{/if}}" data-uuid="{{item.uuid}}">
+          <img src="{{item.img}}" alt="{{item.name}}"/>
+          <span class="item-name">{{item.name}}</span>
+          <span class="item-price"><i class="fa-solid fa-coins"></i> {{item.price}}</span>
+          <a class="remove-item" data-action="removeItem" data-uuid="{{item.uuid}}">
+            <i class="fa-solid fa-xmark"></i>
+          </a>
+        </li>
+        {{else}}
+        <li class="empty">{{localize "CRUCIBLE_SHOP.NoCustomItems"}}</li>
+        {{/each}}
+      </ol>
+    </div>
+    {{else}}
+    <p class="hint">{{localize "CRUCIBLE_SHOP.DefaultModeHint"}}</p>
+    {{/if}}
+
+    <div class="shop-invite-panel">
+      <h3>{{localize "CRUCIBLE_SHOP.InvitePlayers"}}</h3>
+      <button type="button" class="invite-public" data-action="invitePublic">
+        <i class="fa-solid fa-bullhorn"></i> {{localize "CRUCIBLE_SHOP.InvitePublic"}}
+      </button>
+      {{#unless noUsers}}
+      <ol class="user-checklist">
+        {{#each users as |user|}}
+        <li>
+          <label>
+            <input type="checkbox" name="inviteUser" value="{{user.id}}"/>
+            {{user.name}}
+            {{#if user.active}}<i class="fa-solid fa-circle online" data-tooltip="{{localize 'CRUCIBLE_SHOP.Online'}}"></i>{{/if}}
+          </label>
+        </li>
+        {{/each}}
+      </ol>
+      <button type="button" class="invite-whisper" data-action="inviteWhisper">
+        <i class="fa-solid fa-user"></i> {{localize "CRUCIBLE_SHOP.InviteWhisper"}}
+      </button>
+      {{/unless}}
+    </div>
+
+    {{/if}}
+  </section>
+</div>

@@ -1,0 +1,93 @@
+<div class="shop-app-layout">
+
+  <header class="shop-header">
+    <div class="shop-search-wrapper">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input type="text" class="shop-search" placeholder="{{localize 'CRUCIBLE_SHOP.SearchPlaceholder'}}"/>
+    </div>
+    <div class="shop-currency">
+      <i class="fa-solid fa-coins"></i>
+      <span>{{localize "CRUCIBLE_SHOP.Remaining"}}: <strong>{{remaining}}</strong> / {{currency}}</span>
+    </div>
+  </header>
+
+  <nav class="shop-filters">
+    <a class="filter-type {{#unless filterType}}active{{/unless}}" data-action="filterType">
+      {{localize "CRUCIBLE_SHOP.AllTypes"}}
+    </a>
+    {{#each filterTypes as |t|}}
+    <a class="filter-type {{#if t.active}}active{{/if}}" data-action="filterType" data-filter-type="{{t.id}}">
+      {{t.label}}
+    </a>
+    {{/each}}
+  </nav>
+
+  {{#if filterCategories}}
+  <nav class="shop-filters shop-filters-category">
+    <a class="filter-category {{#unless filterCategory}}active{{/unless}}" data-action="filterCategory">
+      {{localize "CRUCIBLE_SHOP.AllCategories"}}
+    </a>
+    {{#each filterCategories as |c|}}
+    <a class="filter-category {{#if c.active}}active{{/if}}" data-action="filterCategory" data-filter-category="{{c.id}}">
+      {{c.label}}
+    </a>
+    {{/each}}
+  </nav>
+  {{/if}}
+
+  <div class="shop-body">
+    <ol class="shop-list">
+      {{#if noItems}}
+      <li class="empty">{{localize "CRUCIBLE_SHOP.NoItems"}}</li>
+      {{/if}}
+      {{#each shopItems as |item|}}
+      <li class="shop-entry {{#if item.unaffordable}}unaffordable{{/if}}" data-uuid="{{item.uuid}}" data-item-name="{{item.name}}">
+        <img src="{{item.img}}" alt="{{item.name}}"/>
+        <div class="shop-entry-info">
+          <span class="item-name">{{item.name}}</span>
+          {{#if item.tags.length}}
+          <div class="item-tags">
+            {{#each item.tags as |tag|}}
+            <span class="tag {{#if tag.unmet}}unmet{{/if}}" {{#if tag.tooltip}}data-tooltip="{{tag.tooltip}}"{{/if}}>{{tag.label}}</span>
+            {{/each}}
+          </div>
+          {{/if}}
+        </div>
+        <span class="item-price"><i class="fa-solid fa-coins"></i> {{item.price}}</span>
+        <div class="item-controls">
+          {{#if item.quantity}}
+          <a class="remove" data-action="removeItem" data-uuid="{{item.uuid}}"><i class="fa-solid fa-minus"></i></a>
+          <span class="qty">{{item.quantity}}</span>
+          {{/if}}
+          <a class="add" data-action="addItem" data-uuid="{{item.uuid}}"><i class="fa-solid fa-plus"></i></a>
+        </div>
+      </li>
+      {{/each}}
+    </ol>
+
+    <aside class="shop-cart">
+      <h3>{{localize "CRUCIBLE_SHOP.Cart"}}</h3>
+      <ol class="shop-cart-list">
+        {{#if cartEmpty}}
+        <li class="empty">{{localize "CRUCIBLE_SHOP.CartEmpty"}}</li>
+        {{/if}}
+        {{#each cartItems as |item|}}
+        <li class="cart-entry {{#if item.unaffordable}}unaffordable{{/if}}" data-uuid="{{item.uuid}}">
+          <img src="{{item.img}}" alt="{{item.name}}"/>
+          <span class="item-name">{{item.name}} <span class="qty">x{{item.quantity}}</span></span>
+          <span class="item-total"><i class="fa-solid fa-coins"></i> {{item.totalCost}}</span>
+          <a class="remove" data-action="removeItem" data-uuid="{{item.uuid}}"><i class="fa-solid fa-xmark"></i></a>
+        </li>
+        {{/each}}
+      </ol>
+      <div class="cart-actions">
+        <button type="button" data-action="clearCart" {{#if cartEmpty}}disabled{{/if}}>
+          {{localize "CRUCIBLE_SHOP.ClearCart"}}
+        </button>
+        <button type="button" class="confirm" data-action="confirmPurchase" {{#if cartEmpty}}disabled{{/if}}>
+          <i class="fa-solid fa-check"></i> {{localize "CRUCIBLE_SHOP.ConfirmPurchase"}}
+        </button>
+      </div>
+    </aside>
+  </div>
+</div>
