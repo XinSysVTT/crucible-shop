@@ -38,7 +38,8 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
       removeItem: CrucibleShopManagerApp.#onRemoveItem,
       invitePublic: CrucibleShopManagerApp.#onInvitePublic,
       inviteWhisper: CrucibleShopManagerApp.#onInviteWhisper,
-      openShop: CrucibleShopManagerApp.#onOpenShop
+      openShop: CrucibleShopManagerApp.#onOpenShop,
+      randomizeItems: CrucibleShopManagerApp.#onRandomizeItems
     }
   };
 
@@ -47,7 +48,7 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
     manager: {
       id: "manager",
       template: "modules/crucible-shop/templates/shop-manager.hbs",
-      scrollable: [".shop-list-panel", ".shop-detail-panel"]
+      scrollable: [".shop-list-panel", ".shop-manager-item-list"]
     }
   };
 
@@ -73,10 +74,11 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
 
     let items = [];
     if ( selected?.mode === "custom" ) {
+      const priceOverrides = selected.itemPrices ?? {};
       items = await Promise.all((selected.itemUuids ?? []).map(async uuid => {
         const item = await fromUuid(uuid);
         if ( !item ) return {uuid, name: game.i18n.localize("CRUCIBLE_SHOP.MissingItem"), img: "icons/svg/hazard.svg", price: 0, missing: true};
-        return {uuid, name: item.name, img: item.img, price: item.system?.price ?? 0};
+        return {uuid, name: item.name, img: item.img, price: priceOverrides[uuid] ?? item.system?.price ?? 0};
       }));
     }
 
@@ -109,6 +111,9 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
 
     const modeSelect = this.element.querySelector(".shop-mode-select");
     modeSelect?.addEventListener("change", this.#onChangeMode.bind(this));
+
+    const itemList = this.element.querySelector(".shop-manager-item-list");
+    itemList?.addEventListener("change", this.#onChangePrice.bind(this));
   }
 
   /* -------------------------------------------- */
@@ -170,6 +175,31 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
 
   /* -------------------------------------------- */
 
+  /**
+   * Handle the GM editing a custom shop item's price. This override always takes precedence over
+   * the item's own price, which is how items with no price of their own (or a stale/missing one)
+   * can still be sold in a custom shop.
+   * @param {Event} event
+   */
+  async #onChangePrice(event) {
+    const target = event.target.closest?.("[data-uuid]") ?? event.target;
+    const uuid = target?.dataset?.uuid;
+    if ( !uuid ) return;
+
+    const shops = getShops();
+    const shop = shops[this._state.selectedShopId];
+    if ( !shop || (shop.mode !== "custom") ) return;
+
+    const raw = Number(target.value ?? 0);
+    const price = Number.isFinite(raw) ? Math.max(0, Math.round(raw)) : 0;
+    shop.itemPrices ??= {};
+    shop.itemPrices[uuid] = price;
+    await saveShop(shop);
+    await this.render({parts: ["manager"]});
+  }
+
+  /* -------------------------------------------- */
+
   static async #onCreateShop() {
     const id = foundry.utils.randomID();
     const shop = {id, name: game.i18n.localize("CRUCIBLE_SHOP.NewShop"), mode: "custom", itemUuids: []};
@@ -212,6 +242,7 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
     const shop = shops[this._state.selectedShopId];
     if ( !shop ) return;
     shop.itemUuids = (shop.itemUuids ?? []).filter(u => u !== uuid);
+    if ( shop.itemPrices ) delete shop.itemPrices[uuid];
     await saveShop(shop);
     await this.render({parts: ["manager"]});
   }
@@ -246,4 +277,143 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
     }
     await openShop(actor, shopId);
   }
+
+/* -------------------------------------------- */
+
+/**
+ * Prompt the GM for randomization parameters (mirroring the system's own
+ * `CrucibleItem.randomizeDialog` form) and generate one random item to stock a custom shop.
+ * GM only, and only for custom shops.
+ *
+ * NOTE: this deliberately does NOT call `CrucibleItem.randomizeDialog()`. That method rolls an
+ * item internally, posts a chat message built from THAT roll, but only returns the ChatMessage -
+ * never the Item, and never the item's actual rolled price. The only thing it saves onto the
+ * message's flags is the price MIN/MAX range that was fed in, not the result. Calling
+ * `CrucibleItem.randomize()` a second time with that same range therefore rolls a brand new,
+ * independent item with its own price - which is why the item added to the shop never matched
+ * what was posted to chat, and why two unrelated things (a chat message, a shop item) came out of
+ * one click. Rolling once here and reusing that single result for both the shop and the chat card
+ * fixes both.
+ */
+static async #onRandomizeItems() {
+  const shops = getShops();
+  const shop = shops[this._state.selectedShopId];
+  if ( !shop || (shop.mode !== "custom") ) return;
+
+  const CrucibleItem = crucible?.api?.documents?.CrucibleItem;
+  if ( typeof CrucibleItem?.randomize !== "function" ) {
+    ui.notifications.warn(game.i18n.localize("CRUCIBLE_SHOP.RandomizeUnavailable"));
+    return;
+  }
+
+  const data = await CrucibleShopManagerApp.#promptRandomizeParams();
+  if ( !data ) return; // Dialog was cancelled.
+
+  let item;
+  try {
+    item = await CrucibleItem.randomize({
+      price: {min: data.priceMin, max: data.priceMax},
+      quality: data.quality || undefined,
+      itemTypes: data.itemTypes ?? [],
+      baseUuid: data.baseUuid || undefined
+    });
+
+    // Persist the SAME item we are about to price and post - not a freshly re-rolled one.
+    item = await Item.implementation.create(item.toObject(), {
+      temporary: false
+    });
+  } catch (err) {
+    console.error(
+      "Crucible Shop | Failed to generate or persist the randomized item",
+      err
+    );
+    // err.message here is often something actionable, e.g. "No eligible base items found for
+    // the given constraints" when the price range/item types/quality combination is too narrow -
+    // show that instead of a generic failure notice so the GM knows what to loosen.
+    ui.notifications.error(err.message || game.i18n.localize("CRUCIBLE_SHOP.RandomizeFailed"));
+    return;
+  }
+
+  shop.itemUuids ??= [];
+
+  if ( !item?.uuid || shop.itemUuids.includes(item.uuid) ) {
+    ui.notifications.warn(game.i18n.localize("CRUCIBLE_SHOP.RandomizeFailed"));
+    return;
+  }
+
+  shop.itemUuids.push(item.uuid);
+
+  await saveShop(shop);
+  await this.render({parts: ["manager"]});
+
+  // Post a single chat card for the exact item we just created and added to the shop, so the
+  // price players see in chat always matches the price they'll actually pay.
+  try {
+    const enricherString = (typeof item.toLootEnricher === "function")
+      ? await item.toLootEnricher()
+      : `@UUID[${item.uuid}]{${item.name}}`;
+    await ChatMessage.implementation.create({
+      content: `<p>${enricherString}</p>`,
+      flavor: game.i18n.localize("ITEM.RANDOMIZE.Flavor", {type: game.i18n.localize(`TYPES.Item.${item.type}`)})
+    });
+  } catch (err) {
+    console.error("Crucible Shop | Failed to post the randomized item chat card", err);
+  }
+
+  ui.notifications.info(
+    game.i18n.format("CRUCIBLE_SHOP.RandomizeSuccess", {count: 1})
+  );
+  }
+
+/* -------------------------------------------- */
+
+/**
+ * Build and present the same randomization parameter form `CrucibleItem.randomizeDialog` uses,
+ * without invoking that method's own internal roll+chat-message side effects.
+ * @returns {Promise<object|null>} The submitted form data, or null if cancelled.
+ */
+static async #promptRandomizeParams() {
+  const fields = foundry.data.fields;
+  const _loc = game.i18n.localize.bind(game.i18n);
+  const QT = crucible.CONST.ITEM.QUALITY_TIERS;
+  const affixableTypes = crucible.CONST.ITEM.AFFIXABLE_ITEM_TYPES;
+
+  const currencyInput = (field, config) => crucible.api.applications.elements.HTMLCrucibleCurrencyElement.create(config);
+  // Default to a wide-open range (0 - a high ceiling) rather than leaving these blank. A blank
+  // input resolves to 0, so priceMin AND priceMax both landed on 0 - a window that matches no
+  // real item - which is why randomize() started throwing "No eligible base items found".
+  const DEFAULT_PRICE_MIN = 0;
+  const DEFAULT_PRICE_MAX = 100000;
+  const priceMinField = new fields.NumberField({label: _loc("ITEM.RANDOMIZE.PriceMin"), initial: DEFAULT_PRICE_MIN});
+  const priceMaxField = new fields.NumberField({label: _loc("ITEM.RANDOMIZE.PriceMax"), initial: DEFAULT_PRICE_MAX});
+  const baseUuidField = new fields.DocumentUUIDField({label: _loc("ITEM.RANDOMIZE.BaseItem"),
+    required: false, blank: true, type: "Item"});
+  const itemTypesField = new fields.SetField(new fields.StringField({
+    choices: Object.fromEntries(Array.from(affixableTypes).map(t => [t, game.i18n.localize(`TYPES.Item.${t}`)]))
+  }), {label: _loc("ITEM.RANDOMIZE.ItemTypes")});
+  const qualityField = new fields.StringField({label: _loc("ITEM.RANDOMIZE.Quality"), required: false,
+    blank: true, choices: {"": _loc("ITEM.RANDOMIZE.QualityAny"),
+      ...Object.fromEntries(Object.values(QT).map(q => [q.id, _loc(q.label)]))}});
+
+  const dialogHTML = document.createElement("div");
+  dialogHTML.append(
+    priceMinField.toFormGroup({}, {name: "priceMin", input: currencyInput, value: DEFAULT_PRICE_MIN}),
+    priceMaxField.toFormGroup({}, {name: "priceMax", input: currencyInput, value: DEFAULT_PRICE_MAX}),
+    baseUuidField.toFormGroup({}, {name: "baseUuid"}),
+    itemTypesField.toFormGroup({stacked: true}, {name: "itemTypes", type: "checkboxes", value: Array.from(affixableTypes)}),
+    qualityField.toFormGroup({}, {name: "quality"})
+  );
+
+  return foundry.applications.api.DialogV2.prompt({
+    window: {title: _loc("ITEM.RANDOMIZE.Title"), icon: "fa-wand-sparkles"},
+    position: {width: 520},
+    content: dialogHTML,
+    ok: {
+      label: _loc("ITEM.RANDOMIZE.Generate"),
+      icon: "fa-solid fa-wand-sparkles",
+      callback: (event, button) => new foundry.applications.ux.FormDataExtended(button.form).object
+    },
+    rejectClose: false
+  });
+}
 }

@@ -38,9 +38,19 @@
     "AllTypes": "All",
     "AllCategories": "All",
     "NoItems": "This shop has no items.",
+    "AffordableOnly": "Affordable Only",
+    "AffordableOnlyHint": "Only show items you can currently afford.",
+    "NoAffordableItems": "You cannot afford anything matching the current filters.",
+    "SetCurrency": "Click to set this actor's currency",
     "Cart": "Cart",
     "CartEmpty": "Your cart is empty.",
     "ClearCart": "Clear",
-    "ConfirmPurchase": "Confirm Purchase"
+    "ConfirmPurchase": "Confirm Purchase",
+
+    "ItemPrice": "Price",
+    "PriceUpdated": "Updated the price of {name}.",
+    "RandomizeItems": "Generate Items",
+    "RandomizeUnavailable": "This version of Crucible does not expose an item randomizer.",
+    "RandomizeSuccess": "Added {count} generated item(s) to the shop."
   }
 }

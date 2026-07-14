@@ -35,6 +35,7 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
       removeItem: CrucibleShopApp.#onRemoveItem,
       filterType: CrucibleShopApp.#onFilterType,
       filterCategory: CrucibleShopApp.#onFilterCategory,
+      filterAffordable: CrucibleShopApp.#onFilterAffordable,
       confirmPurchase: CrucibleShopApp.#onConfirmPurchase,
       clearCart: CrucibleShopApp.#onClearCart
     }
@@ -56,7 +57,7 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
   #search = new foundry.applications.ux.SearchFilter({
     inputSelector: ".shop-search",
     contentSelector: ".shop-list",
-    callback: (event, query, rgx, html) => this.#onSearchFilter(event, query, rgx, html)
+    callback: (event, query, rgx, html) => CrucibleShopApp.#onSearchFilter(event, query, rgx, html)
   });
 
   /**
@@ -71,10 +72,10 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
    *   items: {item: Item, price: number}[],
    *   categoriesByType: Record<string, Record<string, string>>,
    *   cart: Record<string, {item: Item, price: number, quantity: number}>,
-   *   filter: {type: string|null, category: string|null}
+   *   filter: {type: string|null, category: string|null, affordableOnly: boolean}
    * }}
    */
-  _state = {items: [], categoriesByType: {}, cart: {}, filter: {type: null, category: null}};
+  _state = {items: [], categoriesByType: {}, cart: {}, filter: {type: null, category: null, affordableOnly: false}};
 
   /* -------------------------------------------- */
 
@@ -150,10 +151,14 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
    */
   async #loadCustomItems() {
     const items = [];
+    const priceOverrides = this.shop.itemPrices ?? {};
     for ( const uuid of this.shop.itemUuids ?? [] ) {
       const item = await fromUuid(uuid);
-      if ( !item || !item.system?.price ) continue;
-      items.push({item, price: item.system.price});
+      if ( !item ) continue;
+      // A price set by the GM in the Shop Manager always wins - this is how items with no price
+      // of their own (custom/homebrew items, or ones just missing a price) can still be sold.
+      const price = priceOverrides[uuid] ?? item.system?.price ?? 0;
+      items.push({item, price});
     }
     return items;
   }
@@ -172,7 +177,7 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const currency = this.actor.system.currency ?? 0;
     const cart = this._state.cart;
-    const {type: filterType, category: filterCategory} = this._state.filter;
+    const {type: filterType, category: filterCategory, affordableOnly} = this._state.filter;
 
     let cartSpent = 0;
     for ( const {price, quantity} of Object.values(cart) ) cartSpent += price * quantity;
@@ -201,14 +206,25 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
     let sourceItems = this._state.items;
     if ( filterType ) sourceItems = sourceItems.filter(e => e.item.type === filterType);
     if ( filterCategory ) sourceItems = sourceItems.filter(e => e.item.system.category === filterCategory);
+    if ( affordableOnly ) {
+      sourceItems = sourceItems.filter(({item, price}) => (price <= remaining) || (item.uuid in cart));
+    }
 
     const shopItems = sourceItems.map(({item, price}) => {
       let tags = {};
       try { tags = item.system.getTags?.() ?? {}; } catch(err) { tags = {}; }
+      tags = Object.fromEntries(
+        Object.entries(tags)
+          .filter(([, v]) => v != null && v !== "")
+          .map(([k, v]) => [k, (typeof v === "string") ? {label: v} : v])
+      );
       if ( (item.type === "weapon") && item.system._getUntrainedTooltip ) {
         const untrainedTooltip = item.system._getUntrainedTooltip(this.actor);
-        if ( untrainedTooltip ) tags.category = {label: tags.category, unmet: true, tooltip: untrainedTooltip};
+        if ( untrainedTooltip && tags.category ) {
+          tags.category = {...tags.category, unmet: true, tooltip: untrainedTooltip};
+        }
       }
+
       return {
         uuid: item.uuid,
         name: item.name,
@@ -233,16 +249,19 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
     return {
       shop: this.shop,
       actor: this.actor,
+      isGM: game.user.isGM,
       currency,
       remaining,
       filterTypes,
       filterType,
       filterCategories,
       filterCategory,
+      filterAffordable: affordableOnly,
       shopItems,
       cartItems,
       cartEmpty: !cartItems.length,
-      noItems: !this._state.items.length
+      noItems: !this._state.items.length,
+      noAffordableItems: affordableOnly && !shopItems.length && !!this._state.items.length
     };
   }
 
@@ -252,6 +271,10 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
   async _onRender(context, options) {
     await super._onRender(context, options);
     this.#search.bind(this.element);
+    if ( game.user.isGM ) {
+      const currencyInput = this.element.querySelector(".shop-currency .total");
+      currencyInput?.addEventListener("change", this.#onChangeCurrency.bind(this));
+    }
   }
 
   /* -------------------------------------------- */
@@ -309,6 +332,13 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   /* -------------------------------------------- */
 
+  static async #onFilterAffordable() {
+    this._state.filter.affordableOnly = !this._state.filter.affordableOnly;
+    await this.render({parts: ["shop"]});
+  }
+
+  /* -------------------------------------------- */
+
   static async #onAddItem(_event, target) {
     const uuid = target.closest("[data-uuid]").dataset.uuid;
     const found = this._state.items.find(e => e.item.uuid === uuid);
@@ -344,6 +374,20 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   static async #onClearCart() {
     this._state.cart = {};
+    await this.render({parts: ["shop"]});
+  }
+
+  /**
+   * GM-only: set the actor's currency directly from the shop window. This is what lets a shop
+   * be used on an actor who has no currency set yet, or whose currency needs correcting, without
+   * leaving the shop to edit the actor sheet. Always writes the same base-unit integer that
+   * formatCurrency()/allocateCurrency() already expect, so it stays denomination-consistent with
+   * the rest of the shop rather than a raw, un-denominated number.
+   */
+  async #onChangeCurrency(event) {
+    const raw = Number(event.target.value ?? 0);
+    const amount = Number.isFinite(raw) ? Math.max(0, Math.round(raw)) : 0;
+    await this.actor.update({"system.currency": amount});
     await this.render({parts: ["shop"]});
   }
 

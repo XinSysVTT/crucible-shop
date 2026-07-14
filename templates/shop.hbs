@@ -9,8 +9,13 @@
       <span>{{localize "CRUCIBLE_SHOP.Remaining"}}:</span>
       <crucible-currency class="remaining" value="{{remaining}}" readonly></crucible-currency>
       <span>/</span>
-      <crucible-currency class="total" value="{{currency}}" readonly></crucible-currency>
+      <crucible-currency class="total" value="{{currency}}" {{#unless isGM}}readonly{{/unless}}
+                    data-tooltip="{{#if isGM}}{{localize 'CRUCIBLE_SHOP.SetCurrency'}}{{/if}}"></crucible-currency>
     </div>
+    <a class="filter-affordable {{#if filterAffordable}}active{{/if}}" data-action="filterAffordable"
+      data-tooltip="{{localize 'CRUCIBLE_SHOP.AffordableOnlyHint'}}">
+      <i class="fa-solid fa-sack-dollar"></i> {{localize "CRUCIBLE_SHOP.AffordableOnly"}}
+    </a>
   </header>
 
   <nav class="shop-filters">
@@ -41,6 +46,9 @@
     <ol class="shop-list">
       {{#if noItems}}
       <li class="empty">{{localize "CRUCIBLE_SHOP.NoItems"}}</li>
+      {{/if}}
+      {{#if noAffordableItems}}
+      <li class="empty">{{localize "CRUCIBLE_SHOP.NoAffordableItems"}}</li>
       {{/if}}
       {{#each shopItems as |item|}}
       <li class="shop-entry {{#if item.unaffordable}}unaffordable{{/if}}" data-uuid="{{item.uuid}}" data-item-name="{{item.name}}">

@@ -72,12 +72,14 @@ Hooks.once("ready", () => {
     CrucibleShopManagerApp
   };
 
-  // GM: "Shop Manager" button in the Items directory, used to create/curate shops and invite players.
-  Hooks.on("renderItemDirectory", (app, html) => {
-    if (!game.user.isGM) return;
+  // In case the Items directory already rendered before this "ready" hook ran, inject once here too.
+  if ( ui.items?.rendered && ui.items.element ) injectShopManagerButton(ui.items, ui.items.element);
+  function injectShopManagerButton(app, html) {
+    if ( !game.user.isGM ) return;
+    if ( game.system.id !== "crucible" ) return;
 
     const root = html instanceof HTMLElement ? html : html[0];
-    if (!root || root.querySelector(".crucible-shop-button")) return;
+    if ( !root || root.querySelector(".crucible-shop-button") ) return;
 
     const button = document.createElement("button");
     button.type = "button";
@@ -87,8 +89,9 @@ Hooks.once("ready", () => {
     const anchor = root.querySelector('[data-action="createFolder"]') ?? root.querySelector('[data-action="createEntry"]');
     if ( !anchor ) return;
     anchor.after(button);
-  });
+  }
 
+Hooks.on("renderItemDirectory", injectShopManagerButton);
   // Console/macro convenience.
   globalThis.crucibleShop = {
     open: openShop,
