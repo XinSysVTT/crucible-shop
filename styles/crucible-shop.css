@@ -505,7 +505,8 @@
   margin: 0;
 }
 
-.crucible-shop-manager .randomize-items {
+.crucible-shop-manager .randomize-items,
+.crucible-shop-manager .add-from-compendium {
   width: auto;
   white-space: nowrap;
 }

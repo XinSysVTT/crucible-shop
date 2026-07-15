@@ -41,7 +41,8 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
       invitePublic: CrucibleShopManagerApp.#onInvitePublic,
       inviteWhisper: CrucibleShopManagerApp.#onInviteWhisper,
       openShop: CrucibleShopManagerApp.#onOpenShop,
-      randomizeItems: CrucibleShopManagerApp.#onRandomizeItems
+      randomizeItems: CrucibleShopManagerApp.#onRandomizeItems,
+      addFromCompendium: CrucibleShopManagerApp.#onAddFromCompendium
     }
   };
 
@@ -529,6 +530,115 @@ static async #promptRandomizeParams() {
     ok: {
       label: _loc("ITEM.RANDOMIZE.Generate"),
       icon: "fa-solid fa-wand-sparkles",
+      callback: (event, button) => new foundry.applications.ux.FormDataExtended(button.form).object
+    },
+    rejectClose: false
+  });
+}
+
+/* -------------------------------------------- */
+/*  Bulk Import From Compendium                  */
+/* -------------------------------------------- */
+
+/**
+ * Bulk-add every matching item from one or more compendium packs into a custom shop's item list -
+ * e.g. "add every Weapon in the core Equipment compendiums" in a single click, instead of
+ * dragging items in one at a time. Items already in the shop are skipped (never duplicated or
+ * re-priced); everything else is added at the compendium item's own listed price, editable
+ * afterward like any other item in the list. GM only, and only for custom shops.
+ */
+static async #onAddFromCompendium() {
+  const shops = getShops();
+  const shop = shops[this._state.selectedShopId];
+  if ( !shop || (shop.mode !== "custom") ) return;
+
+  const data = await CrucibleShopManagerApp.#promptCompendiumImportParams();
+  if ( !data ) return; // Dialog was cancelled.
+  if ( !data.packs?.length ) {
+    ui.notifications.warn(game.i18n.localize("CRUCIBLE_SHOP.ImportSelectPackFirst"));
+    return;
+  }
+
+  shop.itemUuids ??= [];
+  const existing = new Set(shop.itemUuids);
+  const typeFilter = new Set(data.itemTypes ?? []);
+  let added = 0;
+
+  for ( const packId of data.packs ) {
+    const pack = game.packs.get(packId);
+    if ( !pack ) continue;
+    let docs;
+    try {
+      docs = await pack.getDocuments();
+    } catch(err) {
+      console.error(`${MODULE_ID} | Failed to load compendium ${packId}`, err);
+      continue;
+    }
+    for ( const item of docs ) {
+      if ( typeFilter.size && !typeFilter.has(item.type) ) continue;
+      if ( data.priceOnly && !item.system?.price ) continue;
+      if ( existing.has(item.uuid) ) continue;
+      existing.add(item.uuid);
+      shop.itemUuids.push(item.uuid);
+      added++;
+    }
+  }
+
+  if ( !added ) {
+    ui.notifications.info(game.i18n.localize("CRUCIBLE_SHOP.ImportNoneAdded"));
+    return;
+  }
+
+  await saveShop(shop);
+  await this.render({parts: ["manager"]});
+  ui.notifications.info(game.i18n.format("CRUCIBLE_SHOP.ImportSuccess", {count: added}));
+}
+
+/* -------------------------------------------- */
+
+/**
+ * Build and present the compendium bulk-import dialog: which pack(s) to pull from, which item
+ * type(s) to include (leave all unchecked for every type - e.g. check only "Weapon" and "Armor"
+ * to pull in just those), and whether to skip items with no price set.
+ * @returns {Promise<{packs: string[], itemTypes: string[], priceOnly: boolean}|null>}
+ */
+static async #promptCompendiumImportParams() {
+  const fields = foundry.data.fields;
+  const _loc = game.i18n.localize.bind(game.i18n);
+
+  const itemPacks = game.packs.filter(p => p.documentName === "Item");
+  const equipmentPackIds = new Set(crucible?.CONFIG?.packs?.equipment ?? []);
+  const itemTypes = (game.documentTypes?.Item ?? []).filter(t => t !== "base");
+
+  const packsField = new fields.SetField(new fields.StringField({
+    choices: Object.fromEntries(itemPacks.map(p => [p.collection, p.title]))
+  }), {label: _loc("CRUCIBLE_SHOP.ImportPacks")});
+  const itemTypesField = new fields.SetField(new fields.StringField({
+    choices: Object.fromEntries(itemTypes.map(t => [t, _loc(`TYPES.Item.${t}`) || t]))
+  }), {label: _loc("CRUCIBLE_SHOP.ImportItemTypes")});
+  const priceOnlyField = new fields.BooleanField({label: _loc("CRUCIBLE_SHOP.ImportPriceOnly")});
+
+  const dialogHTML = document.createElement("div");
+  dialogHTML.append(
+    packsField.toFormGroup(
+      {stacked: true, hint: _loc("CRUCIBLE_SHOP.ImportPacksHint")},
+      {name: "packs", type: "checkboxes",
+        value: itemPacks.filter(p => equipmentPackIds.has(p.collection)).map(p => p.collection)}
+    ),
+    itemTypesField.toFormGroup(
+      {stacked: true, hint: _loc("CRUCIBLE_SHOP.ImportItemTypesHint")},
+      {name: "itemTypes", type: "checkboxes", value: []}
+    ),
+    priceOnlyField.toFormGroup({hint: _loc("CRUCIBLE_SHOP.ImportPriceOnlyHint")}, {name: "priceOnly", value: true})
+  );
+
+  return foundry.applications.api.DialogV2.prompt({
+    window: {title: _loc("CRUCIBLE_SHOP.ImportTitle"), icon: "fa-solid fa-boxes-stacked"},
+    position: {width: 520, height: "auto"},
+    content: dialogHTML,
+    ok: {
+      label: _loc("CRUCIBLE_SHOP.ImportButton"),
+      icon: "fa-solid fa-boxes-stacked",
       callback: (event, button) => new foundry.applications.ux.FormDataExtended(button.form).object
     },
     rejectClose: false

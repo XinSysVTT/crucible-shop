@@ -55,6 +55,18 @@
     "RandomizeUnavailable": "This version of Crucible does not expose an item randomizer.",
     "RandomizeSuccess": "Added {count} generated item(s) to the shop.",
 
+    "ImportButton": "Add From Compendium",
+    "ImportTitle": "Add Items From Compendium",
+    "ImportPacks": "Compendiums",
+    "ImportPacksHint": "Which compendium pack(s) to pull items from. Defaults to the system's Equipment compendiums.",
+    "ImportItemTypes": "Item Types",
+    "ImportItemTypesHint": "Only add items of these types (e.g. check just Weapon and Armor). Leave all unchecked to add every type.",
+    "ImportPriceOnly": "Only Items With a Price",
+    "ImportPriceOnlyHint": "Skip items that have no price set - these can't be bought or sold anyway.",
+    "ImportSelectPackFirst": "Select at least one compendium to import from.",
+    "ImportNoneAdded": "Nothing matched those filters, or everything matching is already in this shop.",
+    "ImportSuccess": "Added {count} item(s) from the compendium.",
+
     "BuyTab": "Buy",
     "SellTab": "Sell",
     "BuyRate": "Buy Price (%)",
