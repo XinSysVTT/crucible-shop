@@ -26,6 +26,9 @@ import {CrucibleShopManagerApp} from "./shop-manager-app.mjs";
 
 export const MODULE_ID = "crucible-shop";
 
+/** @type {Map<string, number>} Chat message id -> pending setTimeout handle for its expiry. */
+const expiryTimeouts = new Map();
+
 /** @type {{id: string, name: string, mode: "default"|"custom", itemUuids: string[]}} */
 const DEFAULT_SHOP = {id: "default", name: "General Store", mode: "default", itemUuids: [], buyRate: 100, sellRate: 100,
   requireApproval: false};
@@ -56,6 +59,15 @@ Hooks.once("init", () => {
     default: "both"
   });
 
+  game.settings.register(MODULE_ID, "messageExpiration", {
+    name: "CRUCIBLE_SHOP.MessageExpiration",
+    hint: "CRUCIBLE_SHOP.MessageExpirationHint",
+    scope: "world",
+    config: true,
+    type: Number,
+    default: 0
+  });
+
   game.settings.registerMenu(MODULE_ID, "manageShops", {
     name: "CRUCIBLE_SHOP.ManagerTitle",
     label: "CRUCIBLE_SHOP.ManagerTitle",
@@ -83,11 +95,26 @@ Hooks.once("ready", () => {
   // This also doubles as the signal to refresh any open Shop Manager's Pending Requests panel.
   Hooks.on("createChatMessage", message => {
     if ( message.getFlag(MODULE_ID, "transactionRequest") ) refreshOpenManagers();
+    scheduleMessageExpiry(message);
     if ( !game.user.isGM ) return;
     const request = message.getFlag(MODULE_ID, "sellRestock");
     if ( !request ) return;
     performRestock(request.shopId, request.soldItems);
   });
+
+  Hooks.on("deleteChatMessage", message => {
+    const timeout = expiryTimeouts.get(message.id);
+    if ( timeout ) {
+      clearTimeout(timeout);
+      expiryTimeouts.delete(message.id);
+    }
+  });
+
+  // Re-establish expiry timers for any still-pending expiring messages left over from before this
+  // client (re)loaded, e.g. after a world restart or a GM reconnecting mid-session.
+  if ( game.user.isGM ) {
+    for ( const message of game.messages ) scheduleMessageExpiry(message);
+  }
 
   // When a shop requires GM approval, the requesting player's own client learns the outcome by
   // watching for the whispered request message to be updated (by whichever GM approved/denied
@@ -423,10 +450,13 @@ export async function requestTransactionApproval({kind, shop, actor, entries, to
   };
 
   const whisperIds = Array.from(new Set([...gmIds, game.user.id]));
+  const flags = {[MODULE_ID]: {transactionRequest: request}};
+  const delay = getExpirationDelayMs();
+  if ( delay > 0 ) flags[MODULE_ID].expiresAt = Date.now() + delay;
   const message = await ChatMessage.create({
     content: renderTransactionCard(request),
     whisper: whisperIds,
-    flags: {[MODULE_ID]: {transactionRequest: request}}
+    flags
   });
 
   return {message, requestId: request.id};
@@ -573,7 +603,51 @@ export async function inviteToShop(shopId, userIds=[]) {
     </div>`;
   const messageData = {content, speaker: {alias: game.user.name}};
   if ( userIds.length ) messageData.whisper = userIds;
+  const delay = getExpirationDelayMs();
+  if ( delay > 0 ) foundry.utils.setProperty(messageData, `flags.${MODULE_ID}.expiresAt`, Date.now() + delay);
   return ChatMessage.create(messageData);
+}
+
+/* -------------------------------------------- */
+/*  Message Expiration                           */
+/* -------------------------------------------- */
+
+/**
+ * The GM-configured expiration delay, in milliseconds. 0 means expiration is disabled.
+ * @returns {number}
+ */
+function getExpirationDelayMs() {
+  const minutes = Number(game.settings.get(MODULE_ID, "messageExpiration")) || 0;
+  return minutes > 0 ? minutes * 60 * 1000 : 0;
+}
+
+/**
+ * If a chat message carries this module's `expiresAt` flag, schedule (or immediately perform) its
+ * deletion. Only a GM client does the actual scheduling/deleting - every client would otherwise
+ * race to delete the same message and log spurious "not found" errors. This is safe to call
+ * multiple times for the same message; a second call is a no-op while a timer is already pending.
+ * @param {ChatMessage} message
+ */
+function scheduleMessageExpiry(message) {
+  if ( !game.user.isGM ) return;
+  const expiresAt = message.getFlag(MODULE_ID, "expiresAt");
+  if ( !expiresAt ) return;
+  if ( expiryTimeouts.has(message.id) ) return;
+
+  const deleteIfPresent = async () => {
+    expiryTimeouts.delete(message.id);
+    const current = game.messages.get(message.id);
+    if ( !current ) return; // Already gone (deleted manually, or by another process).
+    try {
+      await current.delete();
+    } catch(err) {
+      console.error(`${MODULE_ID} | Failed to delete an expired chat message`, err);
+    }
+  };
+
+  const delay = expiresAt - Date.now();
+  if ( delay <= 0 ) { deleteIfPresent(); return; }
+  expiryTimeouts.set(message.id, setTimeout(deleteIfPresent, delay));
 }
 
 /* -------------------------------------------- */

@@ -9,6 +9,8 @@
     "ChatIntro": "{gm} invites you to visit the {name}.",
     "ChatOpenShop": "Open {name}",
     "OpenShopButton": "Open Shop",
+    "MessageExpiration": "Chat Message Expiration (minutes)",
+    "MessageExpirationHint": "How long shop invite messages and buy/sell approval requests stay in chat before they automatically delete themselves. Set to 0 to disable and keep messages forever.",
 
     "ManagerTitle": "Manage Shops",
     "NewShop": "New Shop",
