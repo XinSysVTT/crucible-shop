@@ -567,22 +567,26 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .crucible-shop-manager .shop-manager-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   padding: 0.2rem 0.4rem;
   background: rgba(255, 255, 255, 0.04);
   border-radius: 4px;
+  min-height: 36px;
 }
 
 .crucible-shop-manager .shop-manager-item img {
+  flex: 0 0 auto;
   width: 28px;
   height: 28px;
   border: none;
   border-radius: 4px;
+  align-self: flex-start;
 }
 
 .crucible-shop-manager .shop-manager-item.missing {
@@ -591,6 +595,32 @@
 
 .crucible-shop-manager .shop-manager-item .item-name {
   flex: 1;
+  min-width: 0;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  align-self: center;
+  padding-block: 0.35rem;
+}
+
+.crucible-shop-manager .shop-manager-item .item-price-input {
+  align-self: center;
+}
+
+.crucible-shop-manager .shop-manager-item .remove-item {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+
+.crucible-shop-manager .shop-manager-item .remove-item:hover {
+  background: rgba(209, 101, 101, 0.2);
+  color: #d16565;
 }
 
 .crucible-shop-manager .shop-invite-panel {
