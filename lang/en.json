@@ -35,6 +35,7 @@
     "SelectCustomFirst": "Switch this shop to Custom Item List before adding items.",
     "DefaultModeHint": "This shop draws its stock from the system's default Equipment compendiums - the same items available during Hero character creation.",
     "InvitePlayers": "Invite Players",
+    "ShopItems": "Shop Items",
     "InvitePublic": "Post Public Invite",
     "InviteWhisper": "Whisper to Selected",
     "SelectPlayersFirst": "Select at least one player to whisper the invite to.",

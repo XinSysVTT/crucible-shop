@@ -52,112 +52,133 @@
       </button>
     </div>
 
-    {{#if (eq selected.mode "custom")}}
-    <div class="shop-item-drop">
-      <div class="shop-item-drop-toolbar">
-        <p class="hint"><i class="fa-solid fa-hand-pointer"></i> {{localize "CRUCIBLE_SHOP.DropHint"}}</p>
-        <button type="button" class="add-from-compendium" data-action="addFromCompendium">
-          <i class="fa-solid fa-boxes-stacked"></i> {{localize "CRUCIBLE_SHOP.ImportButton"}}
-        </button>
-        <button type="button" class="randomize-items" data-action="randomizeItems">
-          <i class="fa-solid fa-dice"></i> {{localize "CRUCIBLE_SHOP.RandomizeItems"}}
-        </button>
-      </div>
-      <ol class="shop-manager-item-list">
-        {{#each itemGroups as |group|}}
-        <li class="shop-item-group-header">{{group.label}}</li>
-        {{#each group.items as |item|}}
-        <li class="shop-manager-item {{#if item.missing}}missing{{/if}}" data-uuid="{{item.uuid}}">
-          <img src="{{item.img}}" alt="{{item.name}}"/>
-          <span class="item-name" title="{{item.name}}">{{item.name}}</span>
-          {{#if item.quality}}
-          <span class="item-quality-badge" data-quality="{{item.quality}}">{{item.qualityLabel}}</span>
-          {{/if}}
-          {{#if item.enchanted}}
-          <i class="fa-solid fa-sparkles item-enchanted-badge" data-tooltip="{{localize 'CRUCIBLE_SHOP.Enchanted'}}"></i>
-          {{/if}}
-          {{#if item.isCompendium}}
-          <i class="fa-solid fa-boxes-stacked item-source-badge" data-tooltip="{{localize 'CRUCIBLE_SHOP.SourceCompendium'}}"></i>
-          {{/if}}
-          {{#unless item.missing}}
-          <crucible-currency class="item-price-input" data-uuid="{{item.uuid}}" value="{{item.price}}"
-                              data-tooltip="{{localize 'CRUCIBLE_SHOP.ItemPrice'}}"></crucible-currency>
-          {{/unless}}
-          <a class="remove-item" data-action="removeItem" data-uuid="{{item.uuid}}">
-            <i class="fa-solid fa-xmark"></i>
-          </a>
-        </li>
-        {{/each}}
-        {{else}}
-        <li class="empty">{{localize "CRUCIBLE_SHOP.NoCustomItems"}}</li>
-        {{/each}}
-      </ol>
-    </div>
-    {{else}}
-    <p class="hint">{{localize "CRUCIBLE_SHOP.DefaultModeHint"}}</p>
-    {{/if}}
+    <div class="shop-panels">
 
-    <div class="shop-invite-panel">
-      <h3>{{localize "CRUCIBLE_SHOP.InvitePlayers"}}</h3>
-      <button type="button" class="invite-public" data-action="invitePublic">
-        <i class="fa-solid fa-bullhorn"></i> {{localize "CRUCIBLE_SHOP.InvitePublic"}}
-      </button>
-      {{#unless noUsers}}
-      <ol class="user-checklist">
-        {{#each users as |user|}}
-        <li>
-          <label>
-            <input type="checkbox" name="inviteUser" value="{{user.id}}"/>
-            {{user.name}}
-            {{#if user.active}}<i class="fa-solid fa-circle online" data-tooltip="{{localize 'CRUCIBLE_SHOP.Online'}}"></i>{{/if}}
-          </label>
-        </li>
-        {{/each}}
-      </ol>
-      <button type="button" class="invite-whisper" data-action="inviteWhisper">
-        <i class="fa-solid fa-user"></i> {{localize "CRUCIBLE_SHOP.InviteWhisper"}}
-      </button>
-      {{/unless}}
-    </div>
-
-    {{#if showPendingPanel}}
-    <div class="pending-requests-panel">
-      <h3>{{localize "CRUCIBLE_SHOP.PendingRequests"}}</h3>
-      {{#if noPendingRequests}}
-      <p class="hint">{{localize "CRUCIBLE_SHOP.NoPendingRequests"}}</p>
-      {{else}}
-      <ol class="pending-requests-list">
-        {{#each pendingRequests as |req|}}
-        <li class="pending-request-entry" data-message-id="{{req.messageId}}">
-          <div class="pending-request-summary">
-            <i class="fa-solid {{#if req.isBuy}}fa-cart-shopping{{else}}fa-hand-holding-dollar{{/if}}"></i>
-            <span>
-              {{#if req.isBuy}}
-              {{localize "CRUCIBLE_SHOP.PendingBuySummary" user=req.userName actor=req.actorName total=req.total}}
+      <div class="shop-panel {{#if (eq expandedPanel "items")}}expanded{{/if}}" data-panel="items">
+        <div class="shop-panel-header" data-action="togglePanel" data-panel="items" role="button" tabindex="0">
+          <h3><i class="fa-solid fa-chevron-right panel-chevron"></i> {{localize "CRUCIBLE_SHOP.ShopItems"}}
+            {{#if (eq selected.mode "custom")}}<span class="panel-count">{{items.length}}</span>{{/if}}</h3>
+        </div>
+        <div class="shop-panel-body">
+          {{#if (eq selected.mode "custom")}}
+          <div class="shop-item-drop">
+            <div class="shop-item-drop-toolbar">
+              <p class="hint"><i class="fa-solid fa-hand-pointer"></i> {{localize "CRUCIBLE_SHOP.DropHint"}}</p>
+              <button type="button" class="add-from-compendium" data-action="addFromCompendium">
+                <i class="fa-solid fa-boxes-stacked"></i> {{localize "CRUCIBLE_SHOP.ImportButton"}}
+              </button>
+              <button type="button" class="randomize-items" data-action="randomizeItems">
+                <i class="fa-solid fa-dice"></i> {{localize "CRUCIBLE_SHOP.RandomizeItems"}}
+              </button>
+            </div>
+            <ol class="shop-manager-item-list">
+              {{#each itemGroups as |group|}}
+              <li class="shop-item-group-header">{{group.label}}</li>
+              {{#each group.items as |item|}}
+              <li class="shop-manager-item {{#if item.missing}}missing{{/if}}" data-uuid="{{item.uuid}}">
+                <img src="{{item.img}}" alt="{{item.name}}"/>
+                <span class="item-name" title="{{item.name}}">{{item.name}}</span>
+                {{#if item.quality}}
+                <span class="item-quality-badge" data-quality="{{item.quality}}">{{item.qualityLabel}}</span>
+                {{/if}}
+                {{#if item.enchanted}}
+                <i class="fa-solid fa-sparkles item-enchanted-badge" data-tooltip="{{localize 'CRUCIBLE_SHOP.Enchanted'}}"></i>
+                {{/if}}
+                {{#if item.isCompendium}}
+                <i class="fa-solid fa-boxes-stacked item-source-badge" data-tooltip="{{localize 'CRUCIBLE_SHOP.SourceCompendium'}}"></i>
+                {{/if}}
+                {{#unless item.missing}}
+                <crucible-currency class="item-price-input" data-uuid="{{item.uuid}}" value="{{item.price}}"
+                                    data-tooltip="{{localize 'CRUCIBLE_SHOP.ItemPrice'}}"></crucible-currency>
+                {{/unless}}
+                <a class="remove-item" data-action="removeItem" data-uuid="{{item.uuid}}">
+                  <i class="fa-solid fa-xmark"></i>
+                </a>
+              </li>
+              {{/each}}
               {{else}}
-              {{localize "CRUCIBLE_SHOP.PendingSellSummary" user=req.userName actor=req.actorName total=req.total}}
-              {{/if}}
-            </span>
+              <li class="empty">{{localize "CRUCIBLE_SHOP.NoCustomItems"}}</li>
+              {{/each}}
+            </ol>
           </div>
-          <ul class="pending-request-items">
-            {{#each req.entries as |entry|}}
-            <li>{{entry.name}} <span class="qty">x{{entry.quantity}}</span></li>
+          {{else}}
+          <p class="hint">{{localize "CRUCIBLE_SHOP.DefaultModeHint"}}</p>
+          {{/if}}
+        </div>
+      </div>
+
+      <div class="shop-panel {{#if (eq expandedPanel "invite")}}expanded{{/if}}" data-panel="invite">
+        <div class="shop-panel-header" data-action="togglePanel" data-panel="invite" role="button" tabindex="0">
+          <h3><i class="fa-solid fa-chevron-right panel-chevron"></i> {{localize "CRUCIBLE_SHOP.InvitePlayers"}}</h3>
+        </div>
+        <div class="shop-panel-body">
+          <button type="button" class="invite-public" data-action="invitePublic">
+            <i class="fa-solid fa-bullhorn"></i> {{localize "CRUCIBLE_SHOP.InvitePublic"}}
+          </button>
+          {{#unless noUsers}}
+          <ol class="user-checklist">
+            {{#each users as |user|}}
+            <li>
+              <label>
+                <input type="checkbox" name="inviteUser" value="{{user.id}}"/>
+                {{user.name}}
+                {{#if user.active}}<i class="fa-solid fa-circle online" data-tooltip="{{localize 'CRUCIBLE_SHOP.Online'}}"></i>{{/if}}
+              </label>
+            </li>
             {{/each}}
-          </ul>
-          <div class="pending-request-actions">
-            <button type="button" class="deny" data-action="denyRequest">
-              <i class="fa-solid fa-xmark"></i> {{localize "CRUCIBLE_SHOP.Deny"}}
-            </button>
-            <button type="button" class="approve" data-action="approveRequest">
-              <i class="fa-solid fa-check"></i> {{localize "CRUCIBLE_SHOP.Approve"}}
-            </button>
-          </div>
-        </li>
-        {{/each}}
-      </ol>
+          </ol>
+          <button type="button" class="invite-whisper" data-action="inviteWhisper">
+            <i class="fa-solid fa-user"></i> {{localize "CRUCIBLE_SHOP.InviteWhisper"}}
+          </button>
+          {{/unless}}
+        </div>
+      </div>
+
+      {{#if showPendingPanel}}
+      <div class="shop-panel {{#if (eq expandedPanel "pending")}}expanded{{/if}}" data-panel="pending">
+        <div class="shop-panel-header" data-action="togglePanel" data-panel="pending" role="button" tabindex="0">
+          <h3><i class="fa-solid fa-chevron-right panel-chevron"></i> {{localize "CRUCIBLE_SHOP.PendingRequests"}}
+            {{#unless noPendingRequests}}<span class="panel-count">{{pendingRequests.length}}</span>{{/unless}}</h3>
+        </div>
+        <div class="shop-panel-body">
+          {{#if noPendingRequests}}
+          <p class="hint">{{localize "CRUCIBLE_SHOP.NoPendingRequests"}}</p>
+          {{else}}
+          <ol class="pending-requests-list">
+            {{#each pendingRequests as |req|}}
+            <li class="pending-request-entry" data-message-id="{{req.messageId}}">
+              <div class="pending-request-summary">
+                <i class="fa-solid {{#if req.isBuy}}fa-cart-shopping{{else}}fa-hand-holding-dollar{{/if}}"></i>
+                <span>
+                  {{#if req.isBuy}}
+                  {{localize "CRUCIBLE_SHOP.PendingBuySummary" user=req.userName actor=req.actorName total=req.total}}
+                  {{else}}
+                  {{localize "CRUCIBLE_SHOP.PendingSellSummary" user=req.userName actor=req.actorName total=req.total}}
+                  {{/if}}
+                </span>
+              </div>
+              <ul class="pending-request-items">
+                {{#each req.entries as |entry|}}
+                <li>{{entry.name}} <span class="qty">x{{entry.quantity}}</span></li>
+                {{/each}}
+              </ul>
+              <div class="pending-request-actions">
+                <button type="button" class="deny" data-action="denyRequest">
+                  <i class="fa-solid fa-xmark"></i> {{localize "CRUCIBLE_SHOP.Deny"}}
+                </button>
+                <button type="button" class="approve" data-action="approveRequest">
+                  <i class="fa-solid fa-check"></i> {{localize "CRUCIBLE_SHOP.Approve"}}
+                </button>
+              </div>
+            </li>
+            {{/each}}
+          </ol>
+          {{/if}}
+        </div>
+      </div>
       {{/if}}
+
     </div>
-    {{/if}}
 
     {{/if}}
   </section>

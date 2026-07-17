@@ -55,7 +55,8 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
       inviteWhisper: CrucibleShopManagerApp.#onInviteWhisper,
       openShop: CrucibleShopManagerApp.#onOpenShop,
       randomizeItems: CrucibleShopManagerApp.#onRandomizeItems,
-      addFromCompendium: CrucibleShopManagerApp.#onAddFromCompendium
+      addFromCompendium: CrucibleShopManagerApp.#onAddFromCompendium,
+      togglePanel: CrucibleShopManagerApp.#onTogglePanel
     }
   };
 
@@ -64,15 +65,17 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
     manager: {
       id: "manager",
       template: "modules/crucible-shop/templates/shop-manager.hbs",
-      scrollable: [".shop-list-panel", ".shop-manager-item-list"]
+      scrollable: [".shop-list-panel", ".shop-panel-body"]
     }
   };
 
   /**
-   * Which shop is currently selected in the left-hand list.
-   * @type {{selectedShopId: string}}
+   * Which shop is currently selected in the left-hand list, and which of the three lower panels
+   * (items / invite / pending) is currently expanded to fill the available space - the other two
+   * collapse down to just their header, accordion-style.
+   * @type {{selectedShopId: string, expandedPanel: "items"|"invite"|"pending"}}
    */
-  _state = {selectedShopId: "default"};
+  _state = {selectedShopId: "default", expandedPanel: "items"};
 
   /* -------------------------------------------- */
   /*  Rendering                                    */
@@ -160,7 +163,8 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
       noUsers: !users.length,
       showPendingPanel,
       pendingRequests,
-      noPendingRequests: showPendingPanel && !pendingRequests.length
+      noPendingRequests: showPendingPanel && !pendingRequests.length,
+      expandedPanel: this._state.expandedPanel
     };
   }
 
@@ -368,6 +372,21 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
 
   static async #onSelectShop(_event, target) {
     this._state.selectedShopId = target.closest("[data-shop-id]").dataset.shopId;
+    await this.render({parts: ["manager"]});
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Expand one of the three lower accordion panels (items / invite / pending), collapsing the
+   * other two down to just their header. Re-clicking the already-expanded panel's header does
+   * nothing - there's always exactly one panel expanded, never zero, so there's always somewhere
+   * for the available vertical space to go.
+   */
+  static async #onTogglePanel(_event, target) {
+    const panel = target.closest("[data-panel]")?.dataset.panel;
+    if ( !panel || (panel === this._state.expandedPanel) ) return;
+    this._state.expandedPanel = panel;
     await this.render({parts: ["manager"]});
   }
 
