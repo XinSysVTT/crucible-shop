@@ -120,6 +120,11 @@ Hooks.once("ready", () => {
     performRestock(request.shopId, request.soldItems);
   });
 
+  // Fix for players who join after a GM has already sent a whispered shop invite: catch them up by
+  // adding them to any still-live invite's whisper list as soon as they connect, rather than adding
+  // a separate always-available "open shop" entry point outside chat.
+  Hooks.on("userConnected", onUserConnected);
+
   Hooks.on("deleteChatMessage", message => {
     const timeout = expiryTimeouts.get(message.id);
     if ( timeout ) {
@@ -941,10 +946,40 @@ export async function inviteToShop(shopId, userIds=[]) {
       </button>
     </div>`;
   const messageData = {content, speaker: {alias: game.user.name}};
-  if ( userIds.length ) messageData.whisper = userIds;
+  if ( userIds.length ) {
+    messageData.whisper = userIds;
+    // Mark this as a whispered shop invite so that, per the "keep chat-only" fix, players who log
+    // in after it was sent still get pulled into its whisper list instead of never seeing it.
+    // Public invites need no such flag - everyone already sees those, present and future.
+    foundry.utils.setProperty(messageData, `flags.${MODULE_ID}.shopInvite`, true);
+  }
   const delay = getExpirationDelayMs();
   if ( delay > 0 ) foundry.utils.setProperty(messageData, `flags.${MODULE_ID}.expiresAt`, Date.now() + delay);
   return ChatMessage.create(messageData);
+}
+
+/* -------------------------------------------- */
+
+/**
+ * Re-whisper every still-live whispered shop invite to a user who just connected, so a player who
+ * joins the session after a GM sent an invite isn't locked out of it. Only one GM client performs
+ * the update (the elected "active" GM, falling back to the lowest-id active GM on older Foundry
+ * versions where `game.users.activeGM` doesn't exist) so clients don't race each other.
+ * @param {User} user
+ * @param {boolean} connected
+ */
+function onUserConnected(user, connected) {
+  if ( !connected || user.isGM || !game.user.isGM ) return;
+  const activeGM = game.users.activeGM ?? game.users.filter(u => u.isGM && u.active).sort((a, b) => a.id.localeCompare(b.id))[0];
+  if ( activeGM && (activeGM !== game.user) ) return;
+
+  for ( const message of game.messages ) {
+    if ( !message.getFlag(MODULE_ID, "shopInvite") ) continue;
+    if ( message.whisper.includes(user.id) ) continue;
+    message.update({whisper: [...message.whisper, user.id]}).catch(err => {
+      console.error(`${MODULE_ID} | Failed to re-whisper a shop invite to a newly connected user`, err);
+    });
+  }
 }
 
 /* -------------------------------------------- */
