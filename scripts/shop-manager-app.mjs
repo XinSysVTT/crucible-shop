@@ -56,16 +56,32 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
       openShop: CrucibleShopManagerApp.#onOpenShop,
       randomizeItems: CrucibleShopManagerApp.#onRandomizeItems,
       addFromCompendium: CrucibleShopManagerApp.#onAddFromCompendium,
-      togglePanel: CrucibleShopManagerApp.#onTogglePanel
+      togglePanel: CrucibleShopManagerApp.#onTogglePanel,
+      exportShop: CrucibleShopManagerApp.#onExportShop,
+      importShop: CrucibleShopManagerApp.#onImportShop
     }
   };
+
+  /**
+   * The shape version stamped onto every exported shop file. Bump this if the exported fields
+   * below ever change in a way that isn't backwards compatible, so a future import can tell old
+   * files apart from new ones.
+   * @type {number}
+   */
+  static EXPORT_VERSION = 1;
 
   /** @override */
   static PARTS = {
     manager: {
       id: "manager",
       template: "modules/crucible-shop/templates/shop-manager.hbs",
-      scrollable: [".shop-list-panel", ".shop-panel-body"]
+      // .shop-manager-item-list, .pending-requests-list, and .history-entries-list each scroll
+      // independently of their parent .shop-panel-body (they have their own overflow-y so the
+      // panel body itself never grows tall enough to scroll). Foundry only restores scrollTop for
+      // elements that appear in this list, so without them here every re-render (e.g. removing an
+      // item, approving a request, undoing a transaction) snapped the list back to the top.
+      scrollable: [".shop-list-panel", ".shop-panel-body", ".shop-manager-item-list",
+        ".pending-requests-list", ".history-entries-list"]
     }
   };
 
@@ -404,6 +420,113 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
     await saveShop(shop);
     this._state.selectedShopId = id;
     await this.render({parts: ["manager"]});
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Export the currently selected shop's configuration (name, mode, rates, item list and any
+   * price overrides) as a downloadable JSON file, so a GM can hand it to another GM to import
+   * into a different world.
+   *
+   * NOTE: itemUuids point at wherever the items actually live - world Items or compendium
+   * entries. A compendium-sourced item only resolves for whoever imports the file if they have
+   * the same compendium pack available (e.g. the same system's Equipment compendiums); items
+   * that live in the exporting GM's world will show as missing for anyone else. This is called
+   * out in the export success notice rather than silently producing a file that partly fails to
+   * resolve on the other end.
+   */
+  static async #onExportShop() {
+    const shops = getShops();
+    const shop = shops[this._state.selectedShopId];
+    if ( !shop ) return;
+
+    const payload = {
+      crucibleShop: true,
+      exportVersion: CrucibleShopManagerApp.EXPORT_VERSION,
+      shop: {
+        name: shop.name,
+        mode: shop.mode,
+        buyRate: shop.buyRate ?? 100,
+        sellRate: shop.sellRate ?? 100,
+        requireApproval: shop.requireApproval ?? false,
+        itemUuids: shop.itemUuids ?? [],
+        itemPrices: shop.itemPrices ?? {}
+      }
+    };
+
+    const filename = `${(shop.name || "shop").slugify()}.json`;
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+    ui.notifications.info(game.i18n.format("CRUCIBLE_SHOP.ExportShopSuccess", {name: shop.name}));
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Import a shop configuration previously produced by {@link CrucibleShopManagerApp.#onExportShop}
+   * (or a hand-written file matching the same shape) as a brand new shop. Always creates a new
+   * shop with a freshly generated id rather than overwriting an existing one, so importing the
+   * same file twice - or a file from a stranger - can never clobber a shop already in this world.
+   */
+  static async #onImportShop() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.style.display = "none";
+    document.body.append(input);
+
+    const cleanup = () => input.remove();
+
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      cleanup();
+      if ( !file ) return;
+
+      let parsed;
+      try {
+        parsed = JSON.parse(await file.text());
+      } catch(err) {
+        ui.notifications.error(game.i18n.localize("CRUCIBLE_SHOP.ImportShopInvalidFile"));
+        return;
+      }
+
+      // Tolerate both the {crucibleShop, shop: {...}} wrapper this module exports and a bare
+      // shop object, in case someone hand-edits or generates a file without the wrapper.
+      const data = (parsed && (typeof parsed === "object") && parsed.shop) ? parsed.shop : parsed;
+      if ( !data || (typeof data !== "object") || !data.name ) {
+        ui.notifications.error(game.i18n.localize("CRUCIBLE_SHOP.ImportShopInvalidFile"));
+        return;
+      }
+
+      const shop = {
+        id: foundry.utils.randomID(),
+        name: String(data.name),
+        mode: data.mode === "custom" ? "custom" : "default",
+        itemUuids: Array.isArray(data.itemUuids) ? data.itemUuids.filter(u => typeof u === "string") : [],
+        itemPrices: (data.itemPrices && (typeof data.itemPrices === "object"))
+          ? Object.fromEntries(Object.entries(data.itemPrices).filter(([, v]) => Number.isFinite(v)))
+          : {},
+        buyRate: Number.isFinite(data.buyRate) ? Math.max(0, Math.round(data.buyRate)) : 100,
+        sellRate: Number.isFinite(data.sellRate) ? Math.max(0, Math.round(data.sellRate)) : 100,
+        requireApproval: !!data.requireApproval
+      };
+
+      await saveShop(shop);
+      this._state.selectedShopId = shop.id;
+      await this.render({parts: ["manager"]});
+      ui.notifications.info(game.i18n.format("CRUCIBLE_SHOP.ImportShopSuccess", {name: shop.name}));
+    }, {once: true});
+
+    input.click();
   }
 
   /* -------------------------------------------- */

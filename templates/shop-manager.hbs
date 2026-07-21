@@ -1,9 +1,14 @@
 <div class="crucible-shop-manager-layout">
 
   <aside class="shop-list-panel">
-    <button type="button" class="create-shop" data-action="createShop">
-      <i class="fa-solid fa-plus"></i> {{localize "CRUCIBLE_SHOP.NewShop"}}
-    </button>
+    <div class="shop-list-toolbar">
+      <button type="button" class="create-shop" data-action="createShop">
+        <i class="fa-solid fa-plus"></i> {{localize "CRUCIBLE_SHOP.NewShop"}}
+      </button>
+      <button type="button" class="import-shop" data-action="importShop" data-tooltip="{{localize 'CRUCIBLE_SHOP.ImportShopHint'}}">
+        <i class="fa-solid fa-file-import"></i> {{localize "CRUCIBLE_SHOP.ImportShopButton"}}
+      </button>
+    </div>
     <ol class="shop-list">
       {{#each shops as |shop|}}
       <li class="shop-list-entry {{#if shop.active}}active{{/if}}" data-shop-id="{{shop.id}}" data-action="selectShop">
@@ -49,6 +54,9 @@
       </div>
       <button type="button" class="preview-shop" data-action="openShop">
         <i class="fa-solid fa-eye"></i> {{localize "CRUCIBLE_SHOP.Preview"}}
+      </button>
+      <button type="button" class="export-shop" data-action="exportShop" data-tooltip="{{localize 'CRUCIBLE_SHOP.ExportShopHint'}}">
+        <i class="fa-solid fa-file-export"></i> {{localize "CRUCIBLE_SHOP.ExportShopButton"}}
       </button>
     </div>
 
