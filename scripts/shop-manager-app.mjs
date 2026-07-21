@@ -63,12 +63,15 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
   };
 
   /**
-   * The shape version stamped onto every exported shop file. Bump this if the exported fields
-   * below ever change in a way that isn't backwards compatible, so a future import can tell old
-   * files apart from new ones.
+   * The shape version stamped onto every exported shop file.
+   * v1: plain `itemUuids`/`itemPrices` - portable only for compendium-sourced items.
+   * v2: an `items` array mixing compendium references with fully embedded world item data, so
+   *     world-sourced items (dragged in by hand, or Randomize-generated) survive the round trip
+   *     too. Bump this again if the exported shape ever changes in a way that isn't backwards
+   *     compatible, so a future import can tell files apart.
    * @type {number}
    */
-  static EXPORT_VERSION = 1;
+  static EXPORT_VERSION = 2;
 
   /** @override */
   static PARTS = {
@@ -425,21 +428,44 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
   /* -------------------------------------------- */
 
   /**
-   * Export the currently selected shop's configuration (name, mode, rates, item list and any
-   * price overrides) as a downloadable JSON file, so a GM can hand it to another GM to import
-   * into a different world.
+   * Export the currently selected shop's configuration (name, mode, rates, and full item list) as
+   * a downloadable JSON file, so a GM can hand it to another GM to import into a different world.
    *
-   * NOTE: itemUuids point at wherever the items actually live - world Items or compendium
-   * entries. A compendium-sourced item only resolves for whoever imports the file if they have
-   * the same compendium pack available (e.g. the same system's Equipment compendiums); items
-   * that live in the exporting GM's world will show as missing for anyone else. This is called
-   * out in the export success notice rather than silently producing a file that partly fails to
-   * resolve on the other end.
+   * Compendium-sourced items are exported as a plain uuid reference - every install of the system
+   * ships the same compendiums, so the uuid alone resolves on the other end, and it stays "live"
+   * (future edits to that compendium entry carry over automatically). World-sourced items (dragged
+   * in by hand, or generated via Randomize) don't exist anywhere but this world, so a full copy of
+   * the item is embedded instead; importing the file recreates that exact item (name, image,
+   * quality, enchantments, everything) as a new world Item rather than producing a dead reference.
+   * An item whose uuid no longer resolves at all (already broken before export) is skipped and
+   * reported, rather than being carried forward into the file as another dead reference.
    */
   static async #onExportShop() {
     const shops = getShops();
     const shop = shops[this._state.selectedShopId];
     if ( !shop ) return;
+
+    const priceOverrides = shop.itemPrices ?? {};
+    const entries = [];
+    let skipped = 0;
+
+    for ( const uuid of shop.itemUuids ?? [] ) {
+      const item = await fromUuid(uuid);
+      if ( !item ) {
+        skipped++;
+        continue;
+      }
+      const price = Object.prototype.hasOwnProperty.call(priceOverrides, uuid) ? priceOverrides[uuid] : null;
+      if ( uuid.startsWith("Compendium.") ) {
+        entries.push({source: "compendium", uuid, price});
+      } else {
+        entries.push({source: "world", itemData: item.toObject(), price});
+      }
+    }
+
+    if ( skipped ) {
+      ui.notifications.warn(game.i18n.format("CRUCIBLE_SHOP.ExportShopSkippedMissing", {count: skipped}));
+    }
 
     const payload = {
       crucibleShop: true,
@@ -450,8 +476,7 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
         buyRate: shop.buyRate ?? 100,
         sellRate: shop.sellRate ?? 100,
         requireApproval: shop.requireApproval ?? false,
-        itemUuids: shop.itemUuids ?? [],
-        itemPrices: shop.itemPrices ?? {}
+        items: entries
       }
     };
 
@@ -473,9 +498,17 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
 
   /**
    * Import a shop configuration previously produced by {@link CrucibleShopManagerApp.#onExportShop}
-   * (or a hand-written file matching the same shape) as a brand new shop. Always creates a new
-   * shop with a freshly generated id rather than overwriting an existing one, so importing the
-   * same file twice - or a file from a stranger - can never clobber a shop already in this world.
+   * as a brand new shop. Always creates a new shop with a freshly generated id rather than
+   * overwriting an existing one, so importing the same file twice - or a file from a stranger -
+   * can never clobber a shop already in this world.
+   *
+   * Embedded world items (see #onExportShop) are recreated as real Items in this world, filed
+   * under the same CrucibleShops/<Shop Name> folder Randomize uses, and the shop points at those
+   * new items - not the original ones, which may not even exist in this world. Compendium
+   * references are used as-is. Files exported by an older version of this module (a bare
+   * `itemUuids`/`itemPrices` shape, with no embedded item data) are still accepted for backward
+   * compatibility, but any world-sourced item in one of those older files will show as missing
+   * until re-added by hand, since there's no embedded copy to recreate it from.
    */
   static async #onImportShop() {
     const input = document.createElement("input");
@@ -511,14 +544,60 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
         id: foundry.utils.randomID(),
         name: String(data.name),
         mode: data.mode === "custom" ? "custom" : "default",
-        itemUuids: Array.isArray(data.itemUuids) ? data.itemUuids.filter(u => typeof u === "string") : [],
-        itemPrices: (data.itemPrices && (typeof data.itemPrices === "object"))
-          ? Object.fromEntries(Object.entries(data.itemPrices).filter(([, v]) => Number.isFinite(v)))
-          : {},
+        itemUuids: [],
+        itemPrices: {},
         buyRate: Number.isFinite(data.buyRate) ? Math.max(0, Math.round(data.buyRate)) : 100,
         sellRate: Number.isFinite(data.sellRate) ? Math.max(0, Math.round(data.sellRate)) : 100,
         requireApproval: !!data.requireApproval
       };
+
+      if ( Array.isArray(data.items) ) {
+        // Current (v2+) format: a mix of compendium references and embedded world item data.
+        let folder; // resolved lazily below, only if a world item actually needs filing
+        const toCreate = [];
+        const pricesForCreated = [];
+
+        for ( const entry of data.items ) {
+          if ( !entry || (typeof entry !== "object") ) continue;
+          if ( (entry.source === "compendium") && (typeof entry.uuid === "string") ) {
+            shop.itemUuids.push(entry.uuid);
+            if ( Number.isFinite(entry.price) ) shop.itemPrices[entry.uuid] = entry.price;
+          } else if ( entry.itemData && (typeof entry.itemData === "object") ) {
+            folder ??= await CrucibleShopManagerApp.#getOrCreateShopFolder(shop);
+            const itemData = foundry.utils.deepClone(entry.itemData);
+            delete itemData._id;
+            delete itemData.ownership;
+            if ( folder ) itemData.folder = folder.id;
+            toCreate.push(itemData);
+            pricesForCreated.push(Number.isFinite(entry.price) ? entry.price : null);
+          }
+        }
+
+        if ( toCreate.length ) {
+          let created = [];
+          try {
+            created = await Item.implementation.createDocuments(toCreate);
+          } catch(err) {
+            console.error(`${MODULE_ID} | Failed to recreate embedded items from an imported shop`, err);
+          }
+          created.forEach((item, i) => {
+            if ( !item?.uuid ) return;
+            shop.itemUuids.push(item.uuid);
+            const price = pricesForCreated[i];
+            if ( Number.isFinite(price) ) shop.itemPrices[item.uuid] = price;
+          });
+          if ( created.length < toCreate.length ) {
+            ui.notifications.warn(game.i18n.format("CRUCIBLE_SHOP.ImportShopPartial",
+              {added: created.length, failed: toCreate.length - created.length}));
+          }
+        }
+      } else {
+        // Legacy (v1) format, or a bare hand-written file - plain uuid references only.
+        shop.itemUuids = Array.isArray(data.itemUuids) ? data.itemUuids.filter(u => typeof u === "string") : [];
+        shop.itemPrices = (data.itemPrices && (typeof data.itemPrices === "object"))
+          ? Object.fromEntries(Object.entries(data.itemPrices).filter(([, v]) => Number.isFinite(v)))
+          : {};
+      }
 
       await saveShop(shop);
       this._state.selectedShopId = shop.id;

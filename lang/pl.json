@@ -34,6 +34,8 @@
     "ImportShopHint": "Utwórz nowy sklep na podstawie wcześniej wyeksportowanego pliku JSON.",
     "ImportShopInvalidFile": "To nie jest prawidłowy plik eksportu sklepu.",
     "ImportShopSuccess": "Zaimportowano \"{name}\" jako nowy sklep.",
+    "ExportShopSkippedMissing": "Pominięto {count} brakujący(-e) przedmiot(y) - nie zostały uwzględnione w eksporcie.",
+    "ImportShopPartial": "Zaimportowano {added} przedmiot(y); {failed} nie udało się odtworzyć.",
     "DropHint": "Przeciągnij tutaj przedmioty ze świata gry, kompendium lub karty postaci, aby dodać je do tego sklepu.",
     "NoCustomItems": "Nie dodano jeszcze żadnych przedmiotów.",
     "MissingItem": "(brakujący przedmiot)",
