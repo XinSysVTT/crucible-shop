@@ -224,6 +224,11 @@
   padding: 0.25rem 0.4rem;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.03);
+  transition: background 0.1s ease;
+}
+
+.crucible-shop .shop-entry:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .crucible-shop .shop-entry.unaffordable {
