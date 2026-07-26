@@ -37,7 +37,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--color-frame-bg-50);
   text-align: center;
   font-size: 1.1rem;
 }
@@ -47,20 +47,60 @@
   opacity: 0.8;
 }
 
-/* Whispered chat card for a pending buy/sell request awaiting GM approval. */
-.crucible-shop-transaction {
-  border: 1px solid rgba(255, 255, 255, 0.15);
+/* Whispered chat card for a pending buy/sell request awaiting GM approval, and the invite card
+   ("<GM> invites you to shop at <name>"). Framed like a Crucible sheet-section so it reads as
+   native system content rather than a plain, unstyled chat message. */
+.crucible-shop-transaction,
+.crucible-shop-invite {
+  font-family: var(--font-body);
+  color: var(--color-text);
+  background: var(--color-frame-bg-50);
+  border: 1px solid var(--color-frame);
   border-radius: 4px;
-  padding: 0.5rem;
+  padding: 0.5rem 0.75rem;
 }
 
 .crucible-shop-transaction .transaction-items {
   margin: 0.25rem 0;
   padding-left: 1.25rem;
+  color: var(--color-secondary);
+}
+
+.crucible-shop-transaction .transaction-items .qty {
+  color: var(--color-tertiary);
 }
 
 .crucible-shop-transaction .transaction-total {
   font-weight: bold;
+  color: var(--color-h1);
+}
+
+/* Crucible's own button skin (--button-* variable overrides + .framed look) only lives under
+   .crucible.application in applications.less. Chat messages carry .crucible but never
+   .application, so without this the shop's chat-card buttons fall back to bare Foundry core
+   button styling. Reproduce the same variables here, scoped to just these two card types. */
+.crucible-shop-transaction button,
+.crucible-shop-invite button {
+  --button-text-color: var(--color-secondary);
+  --button-background-color: var(--color-frame-bg-75);
+  --button-border-color: var(--color-frame);
+  --button-hover-background-color: var(--color-frame-bg-75);
+  --button-hover-border-color: var(--color-frame);
+  --button-hover-text-color: var(--color-primary);
+  padding: 0.25rem 0.5rem;
+  text-align: center;
+  opacity: 0.85;
+}
+
+.crucible-shop-transaction button:hover,
+.crucible-shop-invite button:hover {
+  opacity: 1;
+}
+
+.crucible-shop-transaction button:disabled,
+.crucible-shop-invite button:disabled {
+  opacity: 0.25;
+  pointer-events: none;
 }
 
 .crucible-shop-transaction .transaction-actions {
@@ -70,20 +110,22 @@
 }
 
 .crucible-shop-transaction .transaction-actions .approve {
-  color: #6fcf6f;
+  --button-text-color: var(--color-result-verygood);
+  color: var(--color-result-verygood);
 }
 
 .crucible-shop-transaction .transaction-actions .deny {
-  color: #e07a7a;
+  --button-text-color: var(--color-result-verybad);
+  color: var(--color-result-verybad);
 }
 
 .crucible-shop-transaction.status-approved .transaction-status.approved {
-  color: #6fcf6f;
+  color: var(--color-result-verygood);
 }
 
 .crucible-shop-transaction.status-denied .transaction-status.denied,
 .crucible-shop-transaction.status-failed .transaction-status.failed {
-  color: #e07a7a;
+  color: var(--color-result-verybad);
 }
 
 /* Completed transaction ("receipt") card, whispered for shopping history and undo. */
@@ -94,11 +136,12 @@
 }
 
 .crucible-shop-transaction .transaction-actions .undo {
-  color: #e0c26f;
+  --button-text-color: var(--color-result-warn);
+  color: var(--color-result-warn);
 }
 
 .crucible-shop-transaction.status-undone .transaction-status.undone {
-  color: #e0c26f;
+  color: var(--color-result-warn);
 }
 
 .crucible-shop .shop-header {
@@ -113,7 +156,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--color-frame-bg-75);
   border-radius: 4px;
   padding: 0.25rem 0.5rem;
 }
@@ -129,7 +172,7 @@
   align-items: center;
   gap: 0.4rem;
   white-space: nowrap;
-  color: var(--color-text-light-highlight, #f0d0a0);
+  color: var(--color-accent);
 }
 
 .crucible-shop .filter-affordable {
@@ -138,20 +181,20 @@
   gap: 0.3rem;
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-frame-bg-50);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .crucible-shop .filter-affordable.active {
-  background: var(--color-text-light-highlight, #a3612d);
-  color: #fff;
+  background: var(--color-accent);
+  color: var(--background);
 }
 
 .crucible-shop .shop-tabs {
   display: flex;
   gap: 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--color-frame);
 }
 
 .crucible-shop .shop-tab {
@@ -166,8 +209,8 @@
 
 .crucible-shop .shop-tab.active {
   opacity: 1;
-  color: var(--color-text-light-highlight, #f0d0a0);
-  border-bottom-color: var(--color-text-light-highlight, #a3612d);
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
 }
 
 .crucible-shop .sell-rate-hint {
@@ -190,13 +233,13 @@
 .crucible-shop .shop-filters a {
   padding: 0.15rem 0.6rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-frame-bg-50);
   cursor: pointer;
 }
 
 .crucible-shop .shop-filters a.active {
-  background: var(--color-text-light-highlight, #a3612d);
-  color: #fff;
+  background: var(--color-accent);
+  color: var(--background);
 }
 
 .crucible-shop .shop-body {
@@ -223,12 +266,12 @@
   gap: 0.5rem;
   padding: 0.25rem 0.4rem;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-frame-bg-25);
   transition: background 0.1s ease;
 }
 
 .crucible-shop .shop-entry:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--color-frame-bg-75);
 }
 
 .crucible-shop .shop-entry.unaffordable {
@@ -266,11 +309,11 @@
   font-size: var(--font-size-11, 11px);
   padding: 0 0.35rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-frame-bg-50);
 }
 
 .crucible-shop .item-tags .tag.unmet {
-  color: #d16565;
+  color: var(--color-result-verybad);
 }
 
 .crucible-shop .item-price {
@@ -295,7 +338,7 @@
   display: flex;
   flex-direction: column;
   min-width: 220px;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid var(--color-frame);
   padding-left: 0.75rem;
 }
 
@@ -366,7 +409,7 @@
   flex: 1;
   max-width: 220px;
   min-height: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid var(--color-frame);
   display: flex;
   flex-direction: column;
   padding: 0.5rem;
@@ -415,7 +458,7 @@
 }
 
 .crucible-shop-manager .shop-list-entry.active {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-frame);
 }
 
 .crucible-shop-manager .shop-list-name {
@@ -436,7 +479,7 @@
 
 .crucible-shop-manager .delete-shop:hover {
   opacity: 1;
-  color: #d16565;
+  color: var(--color-result-verybad);
 }
 
 .crucible-shop-manager .shop-detail-panel {
@@ -532,7 +575,7 @@
   flex-direction: column;
   flex: 0 0 auto;
   min-height: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--color-frame);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -548,7 +591,7 @@
   gap: 0.5rem;
   padding: 0.4rem 0.6rem;
   width: 100%;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-frame-bg-25);
   border: none;
   border-radius: 0;
   cursor: pointer;
@@ -556,11 +599,11 @@
 }
 
 .crucible-shop-manager .shop-panel-header:hover {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--color-frame-bg-75);
 }
 
 .crucible-shop-manager .shop-panel.expanded .shop-panel-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--color-frame);
 }
 
 .crucible-shop-manager .shop-panel-header h3 {
@@ -584,7 +627,7 @@
 .crucible-shop-manager .shop-panel-header .panel-count {
   font-size: var(--font-size-10, 10px);
   opacity: 0.65;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-frame-bg-50);
   border-radius: 999px;
   padding: 0.05rem 0.4rem;
 }
@@ -607,7 +650,7 @@
 }
 
 .crucible-shop-manager .shop-item-drop {
-  border: 1px dashed rgba(255, 255, 255, 0.25);
+  border: 1px dashed var(--color-frame);
   border-radius: 4px;
   padding: 0.5rem;
   flex: 1;
@@ -624,7 +667,7 @@
 }
 
 .crucible-shop-manager .pending-request-entry {
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--color-frame);
   border-radius: 4px;
   padding: 0.4rem 0.5rem;
 }
@@ -650,11 +693,11 @@
 }
 
 .crucible-shop-manager .pending-request-actions .approve {
-  color: #6fcf6f;
+  color: var(--color-result-verygood);
 }
 
 .crucible-shop-manager .pending-request-actions .deny {
-  color: #e07a7a;
+  color: var(--color-result-verybad);
 }
 
 .crucible-shop-manager .history-entries-list {
@@ -664,7 +707,7 @@
 }
 
 .crucible-shop-manager .history-entry {
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--color-frame);
   border-radius: 4px;
   padding: 0.4rem 0.5rem;
 }
@@ -704,13 +747,13 @@
 }
 
 .crucible-shop-manager .history-entry-actions .undo {
-  color: #e0c26f;
+  color: var(--color-result-warn);
 }
 
 .crucible-shop-manager .history-entry-undone-badge {
   font-size: 0.85em;
   opacity: 0.75;
-  color: #e0c26f;
+  color: var(--color-result-warn);
 }
 
 .crucible-shop-manager .shop-item-drop-toolbar {
@@ -791,14 +834,14 @@
   align-items: flex-start;
   gap: 0.5rem;
   padding: 0.2rem 0.4rem;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-frame-bg-25);
   border-radius: 4px;
   min-height: 36px;
   transition: background 0.1s ease;
 }
 
 .crucible-shop-manager .shop-manager-item:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--color-frame-bg-75);
 }
 
 .crucible-shop-manager .shop-manager-item img {
@@ -811,7 +854,7 @@
 }
 
 .crucible-shop-manager .shop-manager-item.missing {
-  color: #d16565;
+  color: var(--color-result-verybad);
 }
 
 .crucible-shop-manager .shop-manager-item .item-name {
@@ -840,8 +883,8 @@
 }
 
 .crucible-shop-manager .shop-manager-item .remove-item:hover {
-  background: rgba(209, 101, 101, 0.2);
-  color: #d16565;
+  background: rgba(213, 39, 39, 0.2);
+  color: var(--color-result-verybad);
 }
 
 .crucible-shop-manager .shop-item-group-header {
@@ -862,6 +905,7 @@
   align-self: center;
   opacity: 0.55;
   font-size: 0.8rem;
+  color: var(--color-tertiary);
 }
 
 .crucible-shop-manager .shop-manager-item .item-quality-badge {
@@ -871,8 +915,8 @@
   padding: 0 0.35rem;
   border-radius: 999px;
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.08);
-  color: #b0b0b0;
+  background: var(--color-frame-bg-50);
+  color: var(--color-tertiary);
 }
 
 /* Colors loosely follow the system's own quality progression: fine (green) < superior (blue) <
@@ -910,12 +954,12 @@
 }
 
 .crucible-shop-manager .user-checklist .online {
-  color: #6bd16b;
+  color: var(--color-result-verygood);
   font-size: 8px;
   margin-left: 0.25rem;
 }
 
 .crucible-shop .shop-currency .total:not([readonly]) {
   cursor: text;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.4);
+  border-bottom: 1px dashed var(--color-secondary);
 }

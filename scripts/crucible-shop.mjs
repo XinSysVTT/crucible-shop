@@ -558,7 +558,7 @@ export async function resolveTransactionRequest(messageId, decision) {
   // a second card - the pending-request card simply becomes the receipt once it goes through.
   if ( (status === "approved") && actor ) {
     const history = buildHistory({kind: request.kind, shop: getShop(request.shopId), actor,
-      entries: request.entries, result});
+      entries: request.entries, result, userId: request.userId, userName: request.userName});
     updateData.content = renderHistoryCard(history);
     updateData[`flags.${MODULE_ID}.history`] = history;
   }
@@ -630,10 +630,10 @@ function renderTransactionCard(request) {
 /**
  * Build the plain-data history record for a just-completed transaction.
  * @param {{kind: "buy"|"sell", shop: object, actor: Actor, entries: object[],
- *   result: {spent: number}|{earned: number}}} data
+ *   result: {spent: number}|{earned: number}, userId: string, userName: string}} data
  * @returns {object}
  */
-function buildHistory({kind, shop, actor, entries, result}) {
+function buildHistory({kind, shop, actor, entries, result, userId, userName}) {
   return {
     id: foundry.utils.randomID(),
     kind,
@@ -641,8 +641,8 @@ function buildHistory({kind, shop, actor, entries, result}) {
     shopName: shop.name,
     actorUuid: actor.uuid,
     actorName: actor.name,
-    userId: game.user.id,
-    userName: game.user.name,
+    userId,
+    userName,
     entries,
     total: kind === "buy" ? result.spent : result.earned,
     timestamp: Date.now(),
@@ -661,7 +661,7 @@ function buildHistory({kind, shop, actor, entries, result}) {
  * @returns {Promise<ChatMessage>}
  */
 export async function recordTransaction({kind, shop, actor, entries, result}) {
-  const history = buildHistory({kind, shop, actor, entries, result});
+  const history = buildHistory({kind, shop, actor, entries, result, userId: game.user.id, userName: game.user.name});
   const gmIds = game.users.filter(u => u.isGM && u.active).map(u => u.id);
   const whisper = Array.from(new Set([...gmIds, game.user.id]));
   return ChatMessage.create({
@@ -1034,8 +1034,27 @@ function scheduleMessageExpiry(message) {
  * @param {ChatMessage} message
  * @param {HTMLElement|null} html
  */
+/**
+ * Give a shop chat card Crucible's own chat-message look (dark background/texture, themed fonts
+ * and colors) instead of Foundry's default light chat bubble. The system only does this itself
+ * (in its renderChatMessageHTML handler) for messages with a non-empty `flags.crucible`; our
+ * messages only ever carry flags under our own MODULE_ID namespace (and a public shop invite has
+ * no flags at all), so without this they never picked up the `.crucible`/`.themed.theme-dark`
+ * classes the system's own cards get. Detected by content markup rather than flags so it works
+ * for every card type (transaction, history, invite) regardless of whisper/flag state.
+ * @param {HTMLElement} html
+ */
+function themeChatMessage(html) {
+  if ( !html?.querySelector?.(".crucible-shop-transaction, .crucible-shop-invite") ) return;
+  html.classList.add("crucible");
+  html.querySelector(".message-content")?.classList.add("themed", "theme-dark");
+}
+
+/* -------------------------------------------- */
+
 function bindChatButtons(message, html) {
   if ( !html ) return;
+  themeChatMessage(html);
 
   const openButtons = html.querySelectorAll?.('[data-action="crucible-shop-open"]') ?? [];
   for ( const button of openButtons ) {
