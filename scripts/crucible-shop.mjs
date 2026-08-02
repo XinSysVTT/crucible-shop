@@ -84,10 +84,8 @@ Hooks.once("ready", () => {
     return;
   }
 
-  // Bind clicks on "open shop" and transaction approve/deny/undo chat buttons, in both the modern
-  // (v13+) and legacy chat render hooks.
+  // Bind clicks on "open shop" and transaction approve/deny/undo chat buttons.
   Hooks.on("renderChatMessageHTML", (message, html) => bindChatButtons(message, html));
-  Hooks.on("renderChatMessage", (message, html) => bindChatButtons(message, html[0] ?? html));
 
   // Let a GM undo a completed (non-pending) shop transaction from the chat log's right-click
   // context menu, the same way Crucible's own "Reverse Action" option works for its own actions.
