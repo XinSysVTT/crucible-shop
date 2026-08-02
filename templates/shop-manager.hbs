@@ -83,7 +83,8 @@
               {{#each itemGroups as |group|}}
               <li class="shop-item-group-header">{{group.label}}</li>
               {{#each group.items as |item|}}
-              <li class="shop-manager-item {{#if item.missing}}missing{{/if}}" data-uuid="{{item.uuid}}">
+              <li class="shop-manager-item {{#if item.missing}}missing{{/if}}" data-uuid="{{item.uuid}}"
+                {{#unless item.missing}}data-tooltip="{{localize 'CRUCIBLE_SHOP.InspectItemHint'}}"{{/unless}}>
                 <img src="{{item.img}}" alt="{{item.name}}"/>
                 <span class="item-name" title="{{item.name}}">{{item.name}}</span>
                 {{#if item.quality}}

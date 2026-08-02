@@ -69,7 +69,8 @@
       <li class="empty">{{localize "CRUCIBLE_SHOP.NoAffordableItems"}}</li>
       {{/if}}
       {{#each shopItems as |item|}}
-      <li class="shop-entry {{#if item.unaffordable}}unaffordable{{/if}}" data-uuid="{{item.uuid}}" data-item-name="{{item.name}}">
+      <li class="shop-entry {{#if item.unaffordable}}unaffordable{{/if}}" data-uuid="{{item.uuid}}" data-item-name="{{item.name}}"
+        data-tooltip="{{localize 'CRUCIBLE_SHOP.InspectItemHint'}}">
         <img src="{{item.img}}" alt="{{item.name}}"/>
         <div class="shop-entry-info">
           <span class="item-name">{{item.name}}</span>
@@ -100,7 +101,8 @@
         <li class="empty">{{localize "CRUCIBLE_SHOP.CartEmpty"}}</li>
         {{/if}}
         {{#each cartItems as |item|}}
-        <li class="cart-entry {{#if item.unaffordable}}unaffordable{{/if}}" data-uuid="{{item.uuid}}">
+        <li class="cart-entry {{#if item.unaffordable}}unaffordable{{/if}}" data-uuid="{{item.uuid}}"
+          data-tooltip="{{localize 'CRUCIBLE_SHOP.InspectItemHint'}}">
           <img src="{{item.img}}" alt="{{item.name}}"/>
           <span class="item-name">{{item.name}} <span class="qty">x{{item.quantity}}</span></span>
           <crucible-currency class="item-total" value="{{item.totalCost}}" readonly></crucible-currency>
@@ -128,7 +130,8 @@
       <li class="empty">{{localize "CRUCIBLE_SHOP.NoSellableItems"}}</li>
       {{/if}}
       {{#each sellItems as |item|}}
-      <li class="shop-entry sell-entry" data-item-id="{{item.id}}" data-item-name="{{item.name}}">
+      <li class="shop-entry sell-entry" data-item-id="{{item.id}}" data-item-name="{{item.name}}"
+        data-tooltip="{{localize 'CRUCIBLE_SHOP.InspectItemHint'}}">
         <img src="{{item.img}}" alt="{{item.name}}"/>
         <div class="shop-entry-info">
           <span class="item-name">{{item.name}}</span>
@@ -152,7 +155,7 @@
         <li class="empty">{{localize "CRUCIBLE_SHOP.SellCartEmpty"}}</li>
         {{/if}}
         {{#each sellCartItems as |item|}}
-        <li class="cart-entry" data-item-id="{{item.id}}">
+        <li class="cart-entry" data-item-id="{{item.id}}" data-tooltip="{{localize 'CRUCIBLE_SHOP.InspectItemHint'}}">
           <img src="{{item.img}}" alt="{{item.name}}"/>
           <span class="item-name">{{item.name}} <span class="qty">x{{item.quantity}}</span></span>
           <crucible-currency class="item-total" value="{{item.totalValue}}" readonly></crucible-currency>

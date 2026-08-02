@@ -268,6 +268,7 @@
   border-radius: 4px;
   background: var(--color-frame-bg-25);
   transition: background 0.1s ease;
+  cursor: pointer;
 }
 
 .crucible-shop .shop-entry:hover {
@@ -357,6 +358,7 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  cursor: pointer;
 }
 
 .crucible-shop .cart-entry img {
@@ -838,6 +840,7 @@
   border-radius: 4px;
   min-height: 36px;
   transition: background 0.1s ease;
+  cursor: pointer;
 }
 
 .crucible-shop-manager .shop-manager-item:hover {
@@ -855,6 +858,7 @@
 
 .crucible-shop-manager .shop-manager-item.missing {
   color: var(--color-result-verybad);
+  cursor: default;
 }
 
 .crucible-shop-manager .shop-manager-item .item-name {
@@ -869,6 +873,7 @@
 
 .crucible-shop-manager .shop-manager-item .item-price-input {
   align-self: center;
+  cursor: text;
 }
 
 .crucible-shop-manager .shop-manager-item .remove-item {

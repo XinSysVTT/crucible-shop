@@ -236,6 +236,7 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
 
     const itemList = this.element.querySelector(".shop-manager-item-list");
     itemList?.addEventListener("change", this.#onChangePrice.bind(this));
+    itemList?.addEventListener("dblclick", this.#onItemDoubleClick.bind(this));
 
     const pendingList = this.element.querySelector(".pending-requests-list");
     pendingList?.addEventListener("click", this.#onClickPendingRequest.bind(this));
@@ -413,6 +414,25 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
     shop.itemPrices[uuid] = price;
     await saveShop(shop);
     await this.render({parts: ["manager"]});
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Open an item's sheet for inspection when a shop manager item entry is double-clicked. Lets
+   * a GM check exactly what an item does - particularly useful for items added via Randomize
+   * ("Generate Items"), which can all carry the same generic base name and are otherwise
+   * indistinguishable from each other in the list.
+   * @param {MouseEvent} event
+   */
+  async #onItemDoubleClick(event) {
+    // Skip the remove button (data-action) and the editable price field, which has its own
+    // double-click-to-select behavior that this shouldn't hijack.
+    if ( event.target.closest("[data-action], .item-price-input") ) return;
+    const uuid = event.target.closest("[data-uuid]")?.dataset.uuid;
+    if ( !uuid ) return;
+    const item = await fromUuid(uuid);
+    item?.sheet?.render(true);
   }
 
   /* -------------------------------------------- */

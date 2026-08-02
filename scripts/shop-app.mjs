@@ -339,6 +339,8 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const currencyInput = this.element.querySelector(".shop-currency .total");
       currencyInput?.addEventListener("change", this.#onChangeCurrency.bind(this));
     }
+    const body = this.element.querySelector(".shop-body");
+    body?.addEventListener("dblclick", this.#onItemDoubleClick.bind(this));
   }
 
   /* -------------------------------------------- */
@@ -467,6 +469,27 @@ export class CrucibleShopApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const amount = Number.isFinite(raw) ? Math.max(0, Math.round(raw)) : 0;
     await this.actor.update({"system.currency": amount});
     await this.render({parts: ["shop"]});
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Open an item's sheet for inspection when a shop or cart entry is double-clicked. This is
+   * the only way to see what an item actually does before buying or selling it - especially
+   * important for GM-generated items, which can share one generic base name and are otherwise
+   * indistinguishable from each other in the list.
+   * @param {MouseEvent} event
+   */
+  async #onItemDoubleClick(event) {
+    if ( event.target.closest("[data-action]") ) return; // Let add/remove buttons behave as normal.
+    const uuid = event.target.closest("[data-uuid]")?.dataset.uuid;
+    if ( uuid ) {
+      const item = await fromUuid(uuid);
+      item?.sheet?.render(true);
+      return;
+    }
+    const itemId = event.target.closest("[data-item-id]")?.dataset.itemId;
+    if ( itemId ) this.actor.items.get(itemId)?.sheet?.render(true);
   }
 
   /* -------------------------------------------- */
