@@ -1,19 +1,57 @@
 <div class="crucible-shop-manager-layout">
 
-  <aside class="shop-list-panel">
+  <aside class="shop-list-panel" style="width: {{panelWidth}}px;">
     <div class="shop-list-toolbar">
       <button type="button" class="create-shop" data-action="createShop">
         <i class="fa-solid fa-plus"></i> {{localize "CRUCIBLE_SHOP.NewShop"}}
+      </button>
+      <button type="button" class="create-folder" data-action="createFolder" data-tooltip="{{localize 'CRUCIBLE_SHOP.NewFolderHint'}}">
+        <i class="fa-solid fa-folder-plus"></i>
       </button>
       <button type="button" class="import-shop" data-action="importShop" data-tooltip="{{localize 'CRUCIBLE_SHOP.ImportShopHint'}}">
         <i class="fa-solid fa-file-import"></i> {{localize "CRUCIBLE_SHOP.ImportShopButton"}}
       </button>
     </div>
     <ol class="shop-list">
-      {{#each shops as |shop|}}
-      <li class="shop-list-entry {{#if shop.active}}active{{/if}}" data-shop-id="{{shop.id}}" data-action="selectShop">
+      {{#each folders as |folder|}}
+      <li class="shop-folder" data-folder-id="{{folder.id}}">
+        <div class="shop-folder-header" data-action="toggleFolder" data-folder-id="{{folder.id}}" role="button" tabindex="0">
+          <i class="fa-solid fa-chevron-right folder-chevron {{#if folder.expanded}}expanded{{/if}}"></i>
+          <i class="fa-solid {{#if folder.expanded}}fa-folder-open{{else}}fa-folder{{/if}}"></i>
+          <span class="shop-folder-name" title="{{folder.name}}">{{folder.name}}</span>
+          <span class="shop-folder-count">{{folder.shops.length}}</span>
+          <a class="rename-folder" data-action="renameFolder" data-folder-id="{{folder.id}}" data-tooltip="{{localize 'CRUCIBLE_SHOP.RenameFolder'}}">
+            <i class="fa-solid fa-pen"></i>
+          </a>
+          <a class="delete-folder" data-action="deleteFolder" data-folder-id="{{folder.id}}" data-tooltip="{{localize 'CRUCIBLE_SHOP.DeleteFolder'}}">
+            <i class="fa-solid fa-trash"></i>
+          </a>
+        </div>
+        {{#if folder.expanded}}
+        <ol class="shop-folder-contents">
+          {{#each folder.shops as |shop|}}
+          <li class="shop-list-entry {{#if shop.active}}active{{/if}}" data-shop-id="{{shop.id}}" data-action="selectShop" draggable="true">
+            <i class="fa-solid fa-coins"></i>
+            <span class="shop-list-name" title="{{shop.name}}">{{shop.name}}</span>
+            <span class="shop-list-mode">{{#if (eq shop.mode "custom")}}{{localize "CRUCIBLE_SHOP.ModeCustomShort"}}{{else}}{{localize "CRUCIBLE_SHOP.ModeDefaultShort"}}{{/if}}</span>
+            {{#unless (eq shop.id "default")}}
+            <a class="delete-shop" data-action="deleteShop" data-shop-id="{{shop.id}}" data-tooltip="{{localize 'CRUCIBLE_SHOP.DeleteShop'}}">
+              <i class="fa-solid fa-trash"></i>
+            </a>
+            {{/unless}}
+          </li>
+          {{else}}
+          <li class="empty shop-folder-empty">{{localize "CRUCIBLE_SHOP.FolderEmpty"}}</li>
+          {{/each}}
+        </ol>
+        {{/if}}
+      </li>
+      {{/each}}
+
+      {{#each unfiledShops as |shop|}}
+      <li class="shop-list-entry {{#if shop.active}}active{{/if}}" data-shop-id="{{shop.id}}" data-action="selectShop" draggable="true">
         <i class="fa-solid fa-coins"></i>
-        <span class="shop-list-name">{{shop.name}}</span>
+        <span class="shop-list-name" title="{{shop.name}}">{{shop.name}}</span>
         <span class="shop-list-mode">{{#if (eq shop.mode "custom")}}{{localize "CRUCIBLE_SHOP.ModeCustomShort"}}{{else}}{{localize "CRUCIBLE_SHOP.ModeDefaultShort"}}{{/if}}</span>
         {{#unless (eq shop.id "default")}}
         <a class="delete-shop" data-action="deleteShop" data-shop-id="{{shop.id}}" data-tooltip="{{localize 'CRUCIBLE_SHOP.DeleteShop'}}">
@@ -23,6 +61,7 @@
       </li>
       {{/each}}
     </ol>
+    <div class="shop-list-resize-handle" data-tooltip="{{localize 'CRUCIBLE_SHOP.ResizePanelHint'}}"></div>
   </aside>
 
   <section class="shop-detail-panel">

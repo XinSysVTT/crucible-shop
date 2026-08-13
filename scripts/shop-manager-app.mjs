@@ -1,5 +1,6 @@
 import {MODULE_ID, getShops, saveShop, deleteShop, inviteToShop, openShop, getPendingTransactionRequests,
-  resolveTransactionRequest, getTransactionHistory, undoTransaction} from "./crucible-shop.mjs";
+  resolveTransactionRequest, getTransactionHistory, undoTransaction, getShopFolders, saveShopFolder,
+  deleteShopFolder} from "./crucible-shop.mjs";
 import {CrucibleShopApp} from "./shop-app.mjs";
 
 const {ApplicationV2, HandlebarsApplicationMixin} = foundry.applications.api;
@@ -16,6 +17,11 @@ const MAX_RANDOMIZE_COUNT = 20;
 
 // Name of the top-level Item folder that all shop-generated items are filed under.
 const ROOT_FOLDER_NAME = "CrucibleShops";
+
+// Bounds on how narrow/wide a GM can drag the shop list panel. Narrow enough to still show an
+// icon and a few characters, wide enough that it can't swallow the entire window.
+const MIN_LIST_PANEL_WIDTH = 160;
+const MAX_LIST_PANEL_WIDTH = 600;
 
 /**
  * A GM-facing application for creating and curating shops.
@@ -58,7 +64,11 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
       addFromCompendium: CrucibleShopManagerApp.#onAddFromCompendium,
       togglePanel: CrucibleShopManagerApp.#onTogglePanel,
       exportShop: CrucibleShopManagerApp.#onExportShop,
-      importShop: CrucibleShopManagerApp.#onImportShop
+      importShop: CrucibleShopManagerApp.#onImportShop,
+      createFolder: CrucibleShopManagerApp.#onCreateFolder,
+      renameFolder: CrucibleShopManagerApp.#onRenameFolder,
+      deleteFolder: CrucibleShopManagerApp.#onDeleteFolder,
+      toggleFolder: CrucibleShopManagerApp.#onToggleFolder
     }
   };
 
@@ -89,12 +99,16 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
   };
 
   /**
-   * Which shop is currently selected in the left-hand list, and which of the lower panels
+   * Which shop is currently selected in the left-hand list, which of the lower panels
    * (items / invite / pending / history) is currently expanded to fill the available space - the
-   * others collapse down to just their header, accordion-style.
-   * @type {{selectedShopId: string, expandedPanel: "items"|"invite"|"pending"|"history"}}
+   * others collapse down to just their header, accordion-style - and which shop folders are
+   * currently collapsed. Folder collapse state lives here rather than in a setting since it's
+   * throwaway UI state, the same as expandedPanel: it resets to "all expanded" the next time the
+   * app is opened, rather than persisting forever.
+   * @type {{selectedShopId: string, expandedPanel: "items"|"invite"|"pending"|"history",
+   *   collapsedFolders: Set<string>}}
    */
-  _state = {selectedShopId: "default", expandedPanel: "items"};
+  _state = {selectedShopId: "default", expandedPanel: "items", collapsedFolders: new Set()};
 
   /* -------------------------------------------- */
   /*  Rendering                                    */
@@ -105,6 +119,7 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
     const shops = getShops();
     const shopList = Object.values(shops).sort((a, b) => a.name.localeCompare(b.name));
     let selected = shops[this._state.selectedShopId];
+    const folders = getShopFolders();
     if ( !selected ) {
       selected = shopList[0] ?? null;
       if ( selected ) this._state.selectedShopId = selected.id;
@@ -190,8 +205,23 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
       })
       : [];
 
+    // Group shops for the left-hand list: one bucket per folder (alphabetical, each holding its
+    // own alphabetically-sorted shops), plus a root-level bucket for anything unfiled - including
+    // a shop whose folderId points at a folder that no longer exists, which is treated the same
+    // as unfiled rather than silently vanishing from the list.
+    const withActive = s => ({...s, active: s.id === this._state.selectedShopId});
+    const folderList = Object.values(folders).sort((a, b) => a.name.localeCompare(b.name)).map(folder => ({
+      id: folder.id,
+      name: folder.name,
+      expanded: !this._state.collapsedFolders.has(folder.id),
+      shops: shopList.filter(s => s.folderId === folder.id).map(withActive)
+    }));
+    const unfiledShops = shopList.filter(s => !s.folderId || !folders[s.folderId]).map(withActive);
+
     return {
-      shops: shopList.map(s => ({...s, active: s.id === this._state.selectedShopId})),
+      folders: folderList,
+      unfiledShops,
+      noFolders: !folderList.length,
       selected,
       isDefaultShop: selected?.id === "default",
       items,
@@ -203,8 +233,22 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
       noPendingRequests: showPendingPanel && !pendingRequests.length,
       historyEntries,
       noHistoryEntries: !historyEntries.length,
-      expandedPanel: this._state.expandedPanel
+      expandedPanel: this._state.expandedPanel,
+      panelWidth: CrucibleShopManagerApp.#getListPanelWidth()
     };
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * The GM's saved (client-local) width for the shop list panel, clamped to sane bounds in case
+   * an old/foreign value ever ends up in the setting.
+   * @returns {number}
+   */
+  static #getListPanelWidth() {
+    const raw = Number(game.settings.get(MODULE_ID, "shopListPanelWidth"));
+    if ( !Number.isFinite(raw) ) return 220;
+    return Math.min(Math.max(raw, MIN_LIST_PANEL_WIDTH), MAX_LIST_PANEL_WIDTH);
   }
 
   /* -------------------------------------------- */
@@ -243,6 +287,19 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
 
     const historyList = this.element.querySelector(".history-entries-list");
     historyList?.addEventListener("click", this.#onClickHistoryEntry.bind(this));
+
+    const resizeHandle = this.element.querySelector(".shop-list-resize-handle");
+    resizeHandle?.addEventListener("pointerdown", this.#onResizeHandlePointerDown.bind(this));
+
+    const shopList = this.element.querySelector(".shop-list");
+    if ( shopList ) {
+      for ( const entry of shopList.querySelectorAll(".shop-list-entry") ) {
+        entry.addEventListener("dragstart", this.#onDragStartShop.bind(this));
+      }
+      shopList.addEventListener("dragover", this.#onDragOverList.bind(this));
+      shopList.addEventListener("dragleave", this.#onDragLeaveList.bind(this));
+      shopList.addEventListener("drop", this.#onDropOnList.bind(this));
+    }
   }
 
   /* -------------------------------------------- */
@@ -433,6 +490,201 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
     if ( !uuid ) return;
     const item = await fromUuid(uuid);
     item?.sheet?.render(true);
+  }
+
+  /* -------------------------------------------- */
+  /*  Shop List: Folders, Drag & Drop, Resize      */
+  /* -------------------------------------------- */
+
+  /**
+   * Handle the start of a drag on a shop list entry - stash which shop is being dragged so a
+   * folder header (or the list root, to unfile it) can pick it up on drop. Uses a module-specific
+   * MIME type rather than the standard Foundry "text/plain" Document-drag payload so this can
+   * never be mistaken for (or collide with) an actual Document drag.
+   * @param {DragEvent} event
+   */
+  #onDragStartShop(event) {
+    const entry = event.target.closest("[data-shop-id]");
+    if ( !entry ) return;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/crucible-shop-id", entry.dataset.shopId);
+    // Firefox refuses to start a drag at all unless text/plain has *something* in it, and reading
+    // back a non-JSON text/plain elsewhere (e.g. the item drop zone) already safely no-ops on a
+    // JSON.parse failure - so this is harmless to also set.
+    event.dataTransfer.setData("text/plain", entry.dataset.shopId);
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Highlight the folder (if any) a dragged shop is currently hovering over, so the GM can see
+   * where it will land before releasing.
+   * @param {DragEvent} event
+   */
+  #onDragOverList(event) {
+    if ( !event.dataTransfer.types.includes("text/crucible-shop-id") ) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const over = event.target.closest(".shop-folder-header");
+    for ( const header of this.element.querySelectorAll(".shop-folder-header.drop-target") ) {
+      if ( header !== over ) header.classList.remove("drop-target");
+    }
+    over?.classList.add("drop-target");
+  }
+
+  /* -------------------------------------------- */
+
+  #onDragLeaveList(event) {
+    if ( event.target.closest(".shop-list") !== this.element.querySelector(".shop-list") ) return;
+    if ( event.relatedTarget && this.element.contains(event.relatedTarget) ) return;
+    for ( const header of this.element.querySelectorAll(".shop-folder-header.drop-target") ) {
+      header.classList.remove("drop-target");
+    }
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Handle a shop entry being dropped somewhere in the list: onto a folder's header (or anywhere
+   * else within that folder's own sub-list) files it into that folder, dropped anywhere else in
+   * the list - onto an unfiled shop, empty space, or a shop already at the root - unfiles it back
+   * to the top level.
+   * @param {DragEvent} event
+   */
+  async #onDropOnList(event) {
+    const shopId = event.dataTransfer.getData("text/crucible-shop-id");
+    if ( !shopId ) return;
+    event.preventDefault();
+    for ( const header of this.element.querySelectorAll(".shop-folder-header.drop-target") ) {
+      header.classList.remove("drop-target");
+    }
+
+    const folderGroup = event.target.closest("[data-folder-id]");
+    const folderId = folderGroup?.dataset.folderId ?? null;
+
+    const shops = getShops();
+    const shop = shops[shopId];
+    if ( !shop || (shop.folderId ?? null) === folderId ) return;
+    shop.folderId = folderId;
+    await saveShop(shop);
+    await this.render({parts: ["manager"]});
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Handle the GM dragging the resize handle on the right edge of the shop list panel. The width
+   * is applied live (directly to the element's style, no re-render needed) and only written to
+   * the client-scoped setting once, on release - not on every pointermove - so dragging doesn't
+   * spam the settings store.
+   * @param {PointerEvent} event
+   */
+  #onResizeHandlePointerDown(event) {
+    event.preventDefault();
+    const handle = event.currentTarget;
+    const panel = this.element.querySelector(".shop-list-panel");
+    if ( !panel ) return;
+    handle.setPointerCapture(event.pointerId);
+
+    const panelLeft = panel.getBoundingClientRect().left;
+    const onMove = moveEvent => {
+      const width = Math.min(Math.max(moveEvent.clientX - panelLeft, MIN_LIST_PANEL_WIDTH), MAX_LIST_PANEL_WIDTH);
+      panel.style.width = `${width}px`;
+    };
+    const onUp = async upEvent => {
+      handle.releasePointerCapture(upEvent.pointerId);
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onUp);
+      const width = Math.min(Math.max(upEvent.clientX - panelLeft, MIN_LIST_PANEL_WIDTH), MAX_LIST_PANEL_WIDTH);
+      await game.settings.set(MODULE_ID, "shopListPanelWidth", Math.round(width));
+    };
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onUp);
+  }
+
+  /* -------------------------------------------- */
+
+  static async #onToggleFolder(_event, target) {
+    const folderId = target.closest("[data-folder-id]")?.dataset.folderId;
+    if ( !folderId ) return;
+    if ( this._state.collapsedFolders.has(folderId) ) this._state.collapsedFolders.delete(folderId);
+    else this._state.collapsedFolders.add(folderId);
+    await this.render({parts: ["manager"]});
+  }
+
+  /* -------------------------------------------- */
+
+  static async #onCreateFolder() {
+    const name = await CrucibleShopManagerApp.#promptFolderName();
+    if ( !name ) return;
+    await saveShopFolder({id: foundry.utils.randomID(), name});
+    await this.render({parts: ["manager"]});
+  }
+
+  /* -------------------------------------------- */
+
+  static async #onRenameFolder(event, target) {
+    event.stopPropagation();
+    const folderId = target.closest("[data-folder-id]")?.dataset.folderId;
+    const folder = getShopFolders()[folderId];
+    if ( !folder ) return;
+    const name = await CrucibleShopManagerApp.#promptFolderName(folder.name);
+    if ( !name || (name === folder.name) ) return;
+    await saveShopFolder({id: folder.id, name});
+    await this.render({parts: ["manager"]});
+  }
+
+  /* -------------------------------------------- */
+
+  static async #onDeleteFolder(event, target) {
+    event.stopPropagation();
+    const folderId = target.closest("[data-folder-id]")?.dataset.folderId;
+    if ( !folderId ) return;
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: {title: game.i18n.localize("CRUCIBLE_SHOP.DeleteFolder")},
+      content: `<p>${game.i18n.localize("CRUCIBLE_SHOP.DeleteFolderConfirm")}</p>`
+    });
+    if ( !confirmed ) return;
+    await deleteShopFolder(folderId);
+    this._state.collapsedFolders.delete(folderId);
+    await this.render({parts: ["manager"]});
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Prompt for a folder name via a small DialogV2 form, used for both creating a new folder and
+   * renaming an existing one.
+   * @param {string} [initial]   Pre-filled value, when renaming.
+   * @returns {Promise<string|null>}   The trimmed name, or null if cancelled/left blank.
+   */
+  static async #promptFolderName(initial="") {
+    const isRename = !!initial;
+    const field = new foundry.data.fields.StringField({
+      label: game.i18n.localize("CRUCIBLE_SHOP.FolderName"),
+      required: true, blank: false
+    });
+    const content = field.toFormGroup({}, {name: "name", value: initial, autofocus: true}).outerHTML;
+
+    const result = await foundry.applications.api.DialogV2.prompt({
+      window: {
+        title: game.i18n.localize(isRename ? "CRUCIBLE_SHOP.RenameFolder" : "CRUCIBLE_SHOP.NewFolder"),
+        icon: "fa-solid fa-folder-plus"
+      },
+      position: {width: 400},
+      content,
+      ok: {
+        label: game.i18n.localize(isRename ? "CRUCIBLE_SHOP.RenameFolder" : "CRUCIBLE_SHOP.NewFolder"),
+        icon: "fa-solid fa-check",
+        callback: (event, button) => new foundry.applications.ux.FormDataExtended(button.form).object
+      },
+      rejectClose: false
+    });
+    const name = result?.name?.trim();
+    if ( !name ) return null;
+    return name;
   }
 
   /* -------------------------------------------- */

@@ -408,14 +408,33 @@
 }
 
 .crucible-shop-manager .shop-list-panel {
-  flex: 1;
-  max-width: 220px;
+  position: relative;
+  flex: 0 0 auto;
   min-height: 0;
   border-right: 1px solid var(--color-frame);
   display: flex;
   flex-direction: column;
   padding: 0.5rem;
+  padding-right: calc(0.5rem + 6px);
   overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.crucible-shop-manager .shop-list-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  touch-action: none;
+  z-index: 2;
+}
+
+.crucible-shop-manager .shop-list-resize-handle:hover,
+.crucible-shop-manager .shop-list-resize-handle:active {
+  background: var(--color-border-highlight, #ff6400);
+  opacity: 0.5;
 }
 
 .crucible-shop-manager .shop-list-toolbar {
@@ -434,6 +453,13 @@
 
 .crucible-shop-manager .create-shop {
   margin-bottom: 0;
+}
+
+.crucible-shop-manager .create-folder {
+  flex: 0 0 auto;
+  width: auto;
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
 }
 
 .crucible-shop-manager .export-shop {
@@ -456,11 +482,94 @@
   gap: 0.4rem;
   padding: 0.35rem 0.5rem;
   border-radius: 4px;
-  cursor: pointer;
+  cursor: grab;
+}
+
+.crucible-shop-manager .shop-list-entry:active {
+  cursor: grabbing;
 }
 
 .crucible-shop-manager .shop-list-entry.active {
   background: var(--color-frame);
+}
+
+.crucible-shop-manager .shop-folder-contents .shop-list-entry {
+  margin-left: 1.1rem;
+}
+
+.crucible-shop-manager .shop-folder {
+  display: flex;
+  flex-direction: column;
+}
+
+.crucible-shop-manager .shop-folder-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.crucible-shop-manager .shop-folder-header:hover {
+  background: color-mix(in srgb, var(--color-frame) 60%, transparent);
+}
+
+.crucible-shop-manager .shop-folder-header.drop-target {
+  outline: 1px dashed var(--color-border-highlight, #ff6400);
+  background: color-mix(in srgb, var(--color-border-highlight, #ff6400) 15%, transparent);
+}
+
+.crucible-shop-manager .folder-chevron {
+  font-size: var(--font-size-10, 10px);
+  transition: transform 0.1s ease;
+}
+
+.crucible-shop-manager .folder-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.crucible-shop-manager .shop-folder-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: bold;
+}
+
+.crucible-shop-manager .shop-folder-count {
+  font-size: var(--font-size-10, 10px);
+  opacity: 0.6;
+}
+
+.crucible-shop-manager .rename-folder,
+.crucible-shop-manager .delete-folder {
+  opacity: 0.6;
+}
+
+.crucible-shop-manager .rename-folder:hover {
+  opacity: 1;
+}
+
+.crucible-shop-manager .delete-folder:hover {
+  opacity: 1;
+  color: var(--color-result-verybad);
+}
+
+.crucible-shop-manager .shop-folder-contents {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.crucible-shop-manager .shop-folder-empty {
+  margin-left: 1.1rem;
+  opacity: 0.5;
+  font-size: var(--font-size-11, 11px);
+  padding: 0.2rem 0.5rem;
 }
 
 .crucible-shop-manager .shop-list-name {
@@ -485,7 +594,8 @@
 }
 
 .crucible-shop-manager .shop-detail-panel {
-  flex: 3;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   padding: 0.75rem;
   overflow: hidden;

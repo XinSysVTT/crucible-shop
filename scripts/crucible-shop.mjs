@@ -45,6 +45,28 @@ Hooks.once("init", () => {
     default: {default: foundry.utils.deepClone(DEFAULT_SHOP)}
   });
 
+  // Folders the GM can file shops into within the Manage Shops list. Keyed by folder id ->
+  // {id, name}. A shop belongs to a folder via its own `folderId` field (see DEFAULT_SHOP-shaped
+  // shop objects) rather than the folder holding a list of shop ids, so filing/unfiling a shop is
+  // a one-field edit on the shop itself and never needs to touch the folder record.
+  game.settings.register(MODULE_ID, "shopFolders", {
+    scope: "world",
+    config: false,
+    type: Object,
+    default: {}
+  });
+
+  // Client-local (per-GM) width of the shop list panel in the Manage Shops app, in pixels. Lets a
+  // GM drag the panel wider to read full shop names instead of the fixed width truncating them
+  // with an ellipsis. Client-scoped rather than world-scoped since it's a personal display
+  // preference, not shared shop data.
+  game.settings.register(MODULE_ID, "shopListPanelWidth", {
+    scope: "client",
+    config: false,
+    type: Number,
+    default: 220
+  });
+
   game.settings.register(MODULE_ID, "approvalMethod", {
     name: "CRUCIBLE_SHOP.ApprovalMethod",
     hint: "CRUCIBLE_SHOP.ApprovalMethodHint",
@@ -249,6 +271,53 @@ export async function deleteShop(shopId) {
   const shops = game.settings.get(MODULE_ID, "shops") ?? {};
   delete shops[shopId];
   await game.settings.set(MODULE_ID, "shops", shops);
+}
+
+/* -------------------------------------------- */
+/*  Shop Folders                                 */
+/* -------------------------------------------- */
+
+/**
+ * Get all shop folders, keyed by id.
+ * @returns {Record<string, {id: string, name: string}>}
+ */
+export function getShopFolders() {
+  return foundry.utils.deepClone(game.settings.get(MODULE_ID, "shopFolders") ?? {});
+}
+
+/**
+ * Create or rename a shop folder. GM only.
+ * @param {{id: string, name: string}} folder
+ * @returns {Promise<void>}
+ */
+export async function saveShopFolder(folder) {
+  if ( !game.user.isGM ) return ui.notifications.warn("Only the GM can manage shops.");
+  const folders = game.settings.get(MODULE_ID, "shopFolders") ?? {};
+  folders[folder.id] = folder;
+  await game.settings.set(MODULE_ID, "shopFolders", folders);
+}
+
+/**
+ * Delete a shop folder. GM only. Any shop currently filed into it is unfiled (moved back to the
+ * root of the list) rather than being deleted along with the folder.
+ * @param {string} folderId
+ * @returns {Promise<void>}
+ */
+export async function deleteShopFolder(folderId) {
+  if ( !game.user.isGM ) return ui.notifications.warn("Only the GM can manage shops.");
+  const folders = game.settings.get(MODULE_ID, "shopFolders") ?? {};
+  delete folders[folderId];
+  await game.settings.set(MODULE_ID, "shopFolders", folders);
+
+  const shops = game.settings.get(MODULE_ID, "shops") ?? {};
+  let changed = false;
+  for ( const shop of Object.values(shops) ) {
+    if ( shop.folderId === folderId ) {
+      shop.folderId = null;
+      changed = true;
+    }
+  }
+  if ( changed ) await game.settings.set(MODULE_ID, "shops", shops);
 }
 
 /* -------------------------------------------- */
