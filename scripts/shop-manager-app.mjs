@@ -15,8 +15,10 @@ const DEFAULT_PRICE_MAX = 100000;
 // a mis-click from flooding chat with dozens of cards.
 const MAX_RANDOMIZE_COUNT = 20;
 
-// Name of the top-level Item folder that all shop-generated items are filed under.
-const ROOT_FOLDER_NAME = "CrucibleShops";
+// Collection id of the module's own Item compendium that all shop-generated items are filed
+// into (registered in module.json), and the name of the folder inside it that each shop's
+// items are further sorted under.
+const SHOP_PACK_COLLECTION = `${MODULE_ID}.shop-items`;
 
 // Bounds on how narrow/wide a GM can drag the shop list panel. Narrow enough to still show an
 // icon and a few characters, wide enough that it can't swallow the entire window.
@@ -65,6 +67,7 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
       togglePanel: CrucibleShopManagerApp.#onTogglePanel,
       exportShop: CrucibleShopManagerApp.#onExportShop,
       importShop: CrucibleShopManagerApp.#onImportShop,
+      migrateToCompendium: CrucibleShopManagerApp.#onMigrateToCompendium,
       createFolder: CrucibleShopManagerApp.#onCreateFolder,
       renameFolder: CrucibleShopManagerApp.#onRenameFolder,
       deleteFolder: CrucibleShopManagerApp.#onDeleteFolder,
@@ -824,8 +827,10 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
       };
 
       if ( Array.isArray(data.items) ) {
-        // Current (v2+) format: a mix of compendium references and embedded world item data.
-        let folder; // resolved lazily below, only if a world item actually needs filing
+        // Current (v2+) format: a mix of compendium references and embedded item data that needs
+        // to be materialized into the shop compendium pack (rather than the world).
+        let pack; // resolved lazily below, only if an embedded item actually needs filing
+        let folder;
         const toCreate = [];
         const pricesForCreated = [];
 
@@ -835,6 +840,7 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
             shop.itemUuids.push(entry.uuid);
             if ( Number.isFinite(entry.price) ) shop.itemPrices[entry.uuid] = entry.price;
           } else if ( entry.itemData && (typeof entry.itemData === "object") ) {
+            pack ??= await CrucibleShopManagerApp.#getShopPack();
             folder ??= await CrucibleShopManagerApp.#getOrCreateShopFolder(shop);
             const itemData = foundry.utils.deepClone(entry.itemData);
             delete itemData._id;
@@ -845,10 +851,12 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
           }
         }
 
-        if ( toCreate.length ) {
+        if ( toCreate.length && !pack ) {
+          ui.notifications.error(game.i18n.localize("CRUCIBLE_SHOP.ShopPackUnavailable"));
+        } else if ( toCreate.length ) {
           let created = [];
           try {
-            created = await Item.implementation.createDocuments(toCreate);
+            created = await Item.implementation.createDocuments(toCreate, {pack: pack.collection});
           } catch(err) {
             console.error(`${MODULE_ID} | Failed to recreate embedded items from an imported shop`, err);
           }
@@ -958,31 +966,154 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
     await openShop(undefined, this._state.selectedShopId);
   }
 
+  /* -------------------------------------------- */
+
+  /**
+   * One-off maintenance action: sweep every custom shop for items sourced from the World Items
+   * directory (dragged in by hand, or generated before this module had its own compendium) and
+   * move each one into the module's "Shop Items" compendium, filed under that shop's folder -
+   * the same destination Randomize and shop import already use. Each shop's `itemUuids` /
+   * `itemPrices` are repointed at the new compendium copy and the original world Item is deleted,
+   * so nothing is left duplicated between the world and the compendium.
+   *
+   * Compendium-sourced items are already portable and left untouched. Applies across every custom
+   * shop in one pass rather than just the selected one, since a stray world item in any shop
+   * defeats the point of keeping shop stock out of the world Items directory.
+   */
+  static async #onMigrateToCompendium() {
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: {title: game.i18n.localize("CRUCIBLE_SHOP.MigrateToCompendiumButton")},
+      content: `<p>${game.i18n.localize("CRUCIBLE_SHOP.MigrateToCompendiumConfirm")}</p>`
+    });
+    if ( !confirmed ) return;
+
+    const shops = Object.values(getShops()).filter(shop => shop.mode === "custom");
+    let migrated = 0;
+    let failed = 0;
+    let shopsTouched = 0;
+
+    for ( const shop of shops ) {
+      const worldUuids = (shop.itemUuids ?? []).filter(uuid => !uuid.startsWith("Compendium."));
+      if ( !worldUuids.length ) continue;
+
+      shop.itemPrices ??= {};
+      let pack;
+      let folder;
+      let changed = false;
+
+      for ( const uuid of worldUuids ) {
+        const item = await fromUuid(uuid);
+        if ( !item ) {
+          failed++;
+          continue;
+        }
+
+        pack ??= await CrucibleShopManagerApp.#getShopPack();
+        if ( !pack ) {
+          failed++;
+          continue;
+        }
+        folder ??= await CrucibleShopManagerApp.#getOrCreateShopFolder(shop);
+
+        const itemData = item.toObject();
+        delete itemData._id;
+        delete itemData.ownership;
+        if ( folder ) itemData.folder = folder.id;
+
+        let created;
+        try {
+          created = await Item.implementation.create(itemData, {pack: pack.collection});
+        } catch(err) {
+          console.error(`${MODULE_ID} | Failed to migrate world item "${item.name}" into the shop compendium`, err);
+        }
+        if ( !created?.uuid ) {
+          failed++;
+          continue;
+        }
+
+        const idx = shop.itemUuids.indexOf(uuid);
+        if ( idx !== -1 ) shop.itemUuids[idx] = created.uuid;
+        if ( Object.prototype.hasOwnProperty.call(shop.itemPrices, uuid) ) {
+          shop.itemPrices[created.uuid] = shop.itemPrices[uuid];
+          delete shop.itemPrices[uuid];
+        }
+
+        try {
+          await item.delete();
+        } catch(err) {
+          console.error(`${MODULE_ID} | Failed to delete original world item "${item.name}" after migrating it`, err);
+        }
+
+        migrated++;
+        changed = true;
+      }
+
+      if ( changed ) {
+        shopsTouched++;
+        await saveShop(shop);
+      }
+    }
+
+    if ( !migrated && !failed ) {
+      ui.notifications.info(game.i18n.localize("CRUCIBLE_SHOP.MigrateToCompendiumNone"));
+    } else if ( failed ) {
+      ui.notifications.warn(game.i18n.format("CRUCIBLE_SHOP.MigrateToCompendiumPartial", {count: migrated, failed}));
+    } else {
+      ui.notifications.info(game.i18n.format("CRUCIBLE_SHOP.MigrateToCompendiumSuccess", {count: migrated, shops: shopsTouched}));
+    }
+
+    await this.render({parts: ["manager"]});
+  }
+
 /* -------------------------------------------- */
 
 /**
- * Find (or create) the world Item folder that randomized items for a given shop should be filed
- * into: a top-level "CrucibleShops" folder, with one child subfolder per shop, named after the
- * shop. Reuses existing folders where they already exist rather than creating duplicates on every
- * generate click.
+ * Resolve the module's own "Shop Items" compendium pack, ensuring it's unlocked so items can
+ * actually be written into it (compendia can be manually locked by a GM, which would otherwise
+ * make every generate/import silently fail).
+ * @returns {Promise<CompendiumCollection|null>}
+ */
+static async #getShopPack() {
+  const pack = game.packs.get(SHOP_PACK_COLLECTION);
+  if ( !pack ) {
+    console.error(`${MODULE_ID} | Shop item compendium "${SHOP_PACK_COLLECTION}" is not registered`);
+    return null;
+  }
+  if ( pack.locked ) {
+    try {
+      await pack.configure({locked: false});
+    } catch (err) {
+      console.error(`${MODULE_ID} | Failed to unlock the shop item compendium`, err);
+      return null;
+    }
+  }
+  return pack;
+}
+
+/* -------------------------------------------- */
+
+/**
+ * Find (or create) the compendium Item folder that generated/imported items for a given shop
+ * should be filed into, inside the module's own "Shop Items" pack: one subfolder per shop, named
+ * after the shop. Reuses existing folders where they already exist rather than creating
+ * duplicates on every generate click.
  * @param {{name: string}} shop  The shop being stocked.
- * @returns {Promise<Folder|null>}  The shop's subfolder, or null if folder creation failed.
+ * @returns {Promise<Folder|null>}  The shop's compendium subfolder, or null if unavailable.
  */
 static async #getOrCreateShopFolder(shop) {
-  try {
-    let root = game.folders.find(f => (f.type === "Item") && !f.folder && (f.name === ROOT_FOLDER_NAME));
-    if ( !root ) {
-      root = await Folder.implementation.create({name: ROOT_FOLDER_NAME, type: "Item", folder: null});
-    }
+  const pack = await CrucibleShopManagerApp.#getShopPack();
+  if ( !pack ) return null;
 
+  try {
     const shopName = shop.name || "Shop";
-    let sub = game.folders.find(f => (f.type === "Item") && (f.folder?.id === root.id) && (f.name === shopName));
-    if ( !sub ) {
-      sub = await Folder.implementation.create({name: shopName, type: "Item", folder: root.id});
+    let folder = pack.folders.find(f => (f.name === shopName) && !f.folder);
+    if ( !folder ) {
+      folder = await Folder.implementation.create({name: shopName, type: "Item", folder: null},
+        {pack: pack.collection});
     }
-    return sub;
+    return folder;
   } catch (err) {
-    console.error("Crucible Shop | Failed to find or create shop item folder", err);
+    console.error(`${MODULE_ID} | Failed to find or create shop item folder in the compendium`, err);
     return null;
   }
 }
@@ -1022,7 +1153,13 @@ static async #onRandomizeItems() {
   const count = Math.min(Math.max(Number(data.count) || 1, 1), MAX_RANDOMIZE_COUNT);
   const qualityChoices = Array.from(data.quality ?? []);
 
-  // Resolve (or create) CrucibleShops/<Shop Name> once per batch rather than once per item.
+  // Resolve the shop's compendium pack and its Shop Items/<Shop Name> folder once per batch
+  // rather than once per item.
+  const pack = await CrucibleShopManagerApp.#getShopPack();
+  if ( !pack ) {
+    ui.notifications.error(game.i18n.localize("CRUCIBLE_SHOP.ShopPackUnavailable"));
+    return;
+  }
   const folder = await CrucibleShopManagerApp.#getOrCreateShopFolder(shop);
 
   shop.itemUuids ??= [];
@@ -1047,10 +1184,12 @@ static async #onRandomizeItems() {
         baseUuid: data.baseUuid || undefined
       });
 
-      // Persist the SAME item we are about to price and post - not a freshly re-rolled one.
+      // Persist the SAME item we are about to price and post - not a freshly re-rolled one -
+      // directly into the shop compendium pack rather than as a world item.
       const itemData = item.toObject();
       if ( folder ) itemData.folder = folder.id;
       item = await Item.implementation.create(itemData, {
+        pack: pack.collection,
         temporary: false
       });
     } catch (err) {

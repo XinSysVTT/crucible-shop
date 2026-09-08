@@ -9,7 +9,7 @@ Unlike the Hero Creation wizard's equipment step, this talks to an actor's **rea
 
 - **Default shop** — pulls stock from the system's own Equipment compendium tree.
 - **Custom shops** — GMs create any number of shops, stocked by dragging in Items from the world, a compendium, or an actor sheet. Prices can be overridden per item.
-- **Randomize Items** — quickly stock a custom shop with randomly generated loot within a price range, item type, and quality.
+- **Randomize Items** — quickly stock a custom shop with randomly generated loot within a price range, item type, and quality. Generated items (and any embedded item data recreated from an imported shop file) are saved into the module's own **Shop Items** compendium, filed into a per-shop folder, instead of cluttering the world Items directory.
 - **Cart-based purchasing** — players stage purchases and only spend currency / receive items on confirm; nothing changes until then.
 - **Chat invitations** — GMs post a clickable "open shop" button publicly or as a whisper to specific players. No sockets required; each player opens the shop locally on their own client.
 

@@ -11,6 +11,9 @@
       <button type="button" class="import-shop" data-action="importShop" data-tooltip="{{localize 'CRUCIBLE_SHOP.ImportShopHint'}}">
         <i class="fa-solid fa-file-import"></i> {{localize "CRUCIBLE_SHOP.ImportShopButton"}}
       </button>
+      <button type="button" class="migrate-to-compendium" data-action="migrateToCompendium" data-tooltip="{{localize 'CRUCIBLE_SHOP.MigrateToCompendiumHint'}}">
+        <i class="fa-solid fa-box-archive"></i> {{localize "CRUCIBLE_SHOP.MigrateToCompendiumButton"}}
+      </button>
     </div>
     <ol class="shop-list">
       {{#each folders as |folder|}}
