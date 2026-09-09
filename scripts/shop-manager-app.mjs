@@ -964,100 +964,162 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
   /* -------------------------------------------- */
 
   /**
-   * One-off maintenance action: sweep every custom shop for items sourced from the World Items
-   * directory (dragged in by hand, or generated before this module had its own compendium) and
-   * move each one into the module's "Shop Items" compendium, filed under that shop's folder -
-   * the same destination Randomize and shop import already use. Each shop's `itemUuids` /
-   * `itemPrices` are repointed at the new compendium copy and the original world Item is deleted,
-   * so nothing is left duplicated between the world and the compendium.
+   * One-off maintenance action: sweep world-sourced Items into the module's "Shop Items"
+   * compendium - the same destination Randomize and shop import already use. The prompt dialog
+   * offers two scopes:
+   * - "Custom shop items only": every world-sourced item stocked in a custom shop (dragged in by
+   *   hand, or generated before this module had its own compendium), filed under that shop's
+   *   compendium folder.
+   * - "All world Items": the entire world Items directory. Items stocked by a custom shop still
+   *   land in that shop's folder; everything else goes to the top level of the pack.
    *
-   * Compendium-sourced items are already portable and left untouched. Applies across every custom
-   * shop in one pass rather than just the selected one, since a stray world item in any shop
-   * defeats the point of keeping shop stock out of the world Items directory.
+   * In both scopes each original world Item is deleted after its compendium copy is created, and
+   * every custom shop referencing the old world UUID is repointed at the new compendium UUID, so
+   * nothing is left duplicated between the world and the compendium. Compendium-sourced items are
+   * already portable and always left untouched.
    */
   static async #onMigrateToCompendium() {
-    const confirmed = await foundry.applications.api.DialogV2.confirm({
-      window: {title: game.i18n.localize("CRUCIBLE_SHOP.MigrateToCompendiumButton")},
-      content: `<p>${game.i18n.localize("CRUCIBLE_SHOP.MigrateToCompendiumConfirm")}</p>`
-    });
-    if ( !confirmed ) return;
+    const scope = await CrucibleShopManagerApp.#promptMigrateScope();
+    if ( !scope ) return; // Dialog was cancelled.
 
     const shops = Object.values(getShops()).filter(shop => shop.mode === "custom");
-    let migrated = 0;
-    let failed = 0;
-    let shopsTouched = 0;
+    const pack = await CrucibleShopManagerApp.#getShopPack();
+    if ( !pack ) {
+      ui.notifications.error(game.i18n.localize("CRUCIBLE_SHOP.ShopPackUnavailable"));
+      return;
+    }
 
+    // The first custom shop stocking each world item, if any - drives both folder placement
+    // (migrated stock lands in its shop's folder) and the shop-repointing pass below.
+    const shopByUuid = new Map();
     for ( const shop of shops ) {
-      const worldUuids = (shop.itemUuids ?? []).filter(uuid => !uuid.startsWith("Compendium."));
-      if ( !worldUuids.length ) continue;
-
-      shop.itemPrices ??= {};
-      let pack;
-      let folder;
-      let changed = false;
-
-      for ( const uuid of worldUuids ) {
-        const item = await fromUuid(uuid);
-        if ( !item ) {
-          failed++;
-          continue;
-        }
-
-        pack ??= await CrucibleShopManagerApp.#getShopPack();
-        if ( !pack ) {
-          failed++;
-          continue;
-        }
-        folder ??= await CrucibleShopManagerApp.#getOrCreateShopFolder(shop);
-
-        const itemData = item.toObject();
-        delete itemData._id;
-        delete itemData.ownership;
-        if ( folder ) itemData.folder = folder.id;
-
-        let created;
-        try {
-          created = await Item.implementation.create(itemData, {pack: pack.collection});
-        } catch(err) {
-          console.error(`${MODULE_ID} | Failed to migrate world item "${item.name}" into the shop compendium`, err);
-        }
-        if ( !created?.uuid ) {
-          failed++;
-          continue;
-        }
-
-        const idx = shop.itemUuids.indexOf(uuid);
-        if ( idx !== -1 ) shop.itemUuids[idx] = created.uuid;
-        if ( Object.prototype.hasOwnProperty.call(shop.itemPrices, uuid) ) {
-          shop.itemPrices[created.uuid] = shop.itemPrices[uuid];
-          delete shop.itemPrices[uuid];
-        }
-
-        try {
-          await item.delete();
-        } catch(err) {
-          console.error(`${MODULE_ID} | Failed to delete original world item "${item.name}" after migrating it`, err);
-        }
-
-        migrated++;
-        changed = true;
+      for ( const uuid of (shop.itemUuids ?? []) ) {
+        if ( !uuid.startsWith("Compendium.") && !shopByUuid.has(uuid) ) shopByUuid.set(uuid, shop);
       }
+    }
 
+    // In "all" scope the world Items directory IS the candidate list; in "shops" scope it is
+    // every stocked world item we can still resolve, with dangling uuids counted as failures.
+    let candidates = [];
+    let failed = 0;
+    if ( scope === "all" ) {
+      candidates = Array.from(game.items);
+    } else {
+      for ( const uuid of shopByUuid.keys() ) {
+        const item = await fromUuid(uuid);
+        if ( item ) candidates.push(item);
+        else failed++;
+      }
+    }
+    if ( !candidates.length ) {
+      ui.notifications.info(game.i18n.localize("CRUCIBLE_SHOP.MigrateToCompendiumNone"));
+      return;
+    }
+
+    // Folder per shop, resolved once per shop rather than once per item.
+    const folders = new Map();
+    const getFolder = async shop => {
+      if ( !folders.has(shop.id) ) {
+        folders.set(shop.id, await CrucibleShopManagerApp.#getOrCreateShopFolder(shop));
+      }
+      return folders.get(shop.id);
+    };
+
+    // Old world uuid -> new compendium uuid, for the shop-repointing pass below.
+    const uuidMap = new Map();
+    let migrated = 0;
+
+    for ( const item of candidates ) {
+      const shop = shopByUuid.get(item.uuid);
+      const folder = shop ? await getFolder(shop) : null;
+
+      const itemData = item.toObject();
+      delete itemData._id;
+      delete itemData.ownership;
+      if ( folder ) itemData.folder = folder.id;
+
+      let created;
+      try {
+        created = await Item.implementation.create(itemData, {pack: pack.collection});
+      } catch(err) {
+        console.error(`${MODULE_ID} | Failed to migrate world item "${item.name}" into the shop compendium`, err);
+      }
+      if ( !created?.uuid ) {
+        failed++;
+        continue;
+      }
+      uuidMap.set(item.uuid, created.uuid);
+
+      try {
+        await item.delete();
+      } catch(err) {
+        console.error(`${MODULE_ID} | Failed to delete original world item "${item.name}" after migrating it`, err);
+      }
+      migrated++;
+    }
+
+    // Repoint every custom shop from the deleted world originals at their compendium copies.
+    let shopsTouched = 0;
+    for ( const shop of shops ) {
+      shop.itemPrices ??= {};
+      let changed = false;
+      shop.itemUuids = (shop.itemUuids ?? []).map(uuid => {
+        const mapped = uuidMap.get(uuid);
+        if ( mapped === undefined ) return uuid;
+        changed = true;
+        return mapped;
+      });
+      for ( const [oldUuid, newUuid] of uuidMap ) {
+        if ( Object.prototype.hasOwnProperty.call(shop.itemPrices, oldUuid) ) {
+          shop.itemPrices[newUuid] = shop.itemPrices[oldUuid];
+          delete shop.itemPrices[oldUuid];
+          changed = true;
+        }
+      }
       if ( changed ) {
         shopsTouched++;
         await saveShop(shop);
       }
     }
 
-    if ( !migrated && !failed ) {
-      ui.notifications.info(game.i18n.localize("CRUCIBLE_SHOP.MigrateToCompendiumNone"));
-    } else if ( failed ) {
+    if ( failed ) {
       ui.notifications.warn(game.i18n.format("CRUCIBLE_SHOP.MigrateToCompendiumPartial", {count: migrated, failed}));
+    } else if ( scope === "all" ) {
+      ui.notifications.info(game.i18n.format("CRUCIBLE_SHOP.MigrateToCompendiumAllSuccess", {count: migrated}));
     } else {
       ui.notifications.info(game.i18n.format("CRUCIBLE_SHOP.MigrateToCompendiumSuccess", {count: migrated, shops: shopsTouched}));
     }
 
     await this.render({parts: ["manager"]});
+  }
+
+  /**
+   * Prompt the GM for the scope of a "Migrate to Compendium" run: only the world items stocked by
+   * custom shops, or the entire world Items directory. Both scopes copy into the compendium and
+   * delete the originals; the dialog states that up front since it cannot be undone.
+   * @returns {Promise<"shops"|"all"|null>}  The chosen scope, or null if the dialog was cancelled.
+   */
+  static #promptMigrateScope() {
+    const _loc = game.i18n.localize.bind(game.i18n);
+    const content = `<p>${_loc("CRUCIBLE_SHOP.MigrateToCompendiumIntro")}</p>
+      <div class="form-group stacked">
+        <label class="checkbox"><input type="radio" name="scope" value="shops" checked>
+          ${_loc("CRUCIBLE_SHOP.MigrateToCompendiumScopeShops")}</label>
+        <p class="hint">${_loc("CRUCIBLE_SHOP.MigrateToCompendiumScopeShopsHint")}</p>
+        <label class="checkbox"><input type="radio" name="scope" value="all">
+          ${_loc("CRUCIBLE_SHOP.MigrateToCompendiumScopeAll")}</label>
+        <p class="hint">${_loc("CRUCIBLE_SHOP.MigrateToCompendiumScopeAllHint")}</p>
+      </div>`;
+    return foundry.applications.api.DialogV2.prompt({
+      window: {title: game.i18n.localize("CRUCIBLE_SHOP.MigrateToCompendiumButton")},
+      content,
+      ok: {
+        label: _loc("CRUCIBLE_SHOP.MigrateToCompendiumGo"),
+        icon: "fa-solid fa-box-archive",
+        callback: (event, button) => new foundry.applications.ux.FormDataExtended(button.form).object.scope
+      },
+      rejectClose: false
+    });
   }
 
 /* -------------------------------------------- */
