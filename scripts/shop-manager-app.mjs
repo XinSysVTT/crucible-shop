@@ -15,11 +15,6 @@ const DEFAULT_PRICE_MAX = 100000;
 // a mis-click from flooding chat with dozens of cards.
 const MAX_RANDOMIZE_COUNT = 20;
 
-// Collection id of the module's own Item compendium that all shop-generated items are filed
-// into (registered in module.json), and the name of the folder inside it that each shop's
-// items are further sorted under.
-const SHOP_PACK_COLLECTION = `${MODULE_ID}.shop-items`;
-
 // Bounds on how narrow/wide a GM can drag the shop list panel. Narrow enough to still show an
 // icon and a few characters, wide enough that it can't swallow the entire window.
 const MIN_LIST_PANEL_WIDTH = 160;
@@ -1068,17 +1063,46 @@ export class CrucibleShopManagerApp extends HandlebarsApplicationMixin(Applicati
 /* -------------------------------------------- */
 
 /**
- * Resolve the module's own "Shop Items" compendium pack, ensuring it's unlocked so items can
- * actually be written into it (compendia can be manually locked by a GM, which would otherwise
- * make every generate/import silently fail).
+ * Resolve the "Shop Items" compendium pack, ensuring it's unlocked so items can actually be
+ * written into it (compendia can be manually locked by a GM, which would otherwise make every
+ * generate/import silently fail).
+ *
+ * This no longer assumes the pack declared in module.json actually
+ * registered - that pack only exists if a real LevelDB was already sitting on disk at that path
+ * when Foundry started, so a fresh checkout, or a release that only shipped an empty placeholder
+ * folder, leaves `game.packs` without it forever (no amount of restarting fixes that, since
+ * Foundry never builds a missing pack's LevelDB for you). Instead we create a normal WORLD
+ * compendium ourselves the first time it's needed - which Foundry *does* build on the fly - and
+ * remember its id in a world setting so every later call reuses the same one.
  * @returns {Promise<CompendiumCollection|null>}
  */
 static async #getShopPack() {
-  const pack = game.packs.get(SHOP_PACK_COLLECTION);
+  // Reuse a pack we created ourselves in a previous session, if it still exists.
+  const savedId = game.settings.get(MODULE_ID, "shopPackId");
+  let pack = savedId ? game.packs.get(savedId) : null;
+
+  // Fall back to the pack declared in module.json ("crucible-shop.shop-items"), in case it did
+  // register successfully. The collection id is built here rather than in a module-level constant
+  // because crucible-shop.mjs (which owns MODULE_ID) imports this file, so its body has not yet
+  // run when this module is first evaluated - any top-level reference to MODULE_ID here throws
+  // "Cannot access 'MODULE_ID' before initialization" and kills the whole module at load.
+  pack ??= game.packs.get(`${MODULE_ID}.shop-items`);
+
+  // Neither exists yet - create a fresh world compendium and remember it for next time.
   if ( !pack ) {
-    console.error(`${MODULE_ID} | Shop item compendium "${SHOP_PACK_COLLECTION}" is not registered`);
-    return null;
+    try {
+      pack = await CompendiumCollection.createCompendium({
+        type: "Item",
+        label: "Shop Items",
+        ownership: {PLAYER: "OBSERVER", ASSISTANT: "OWNER"}
+      });
+      await game.settings.set(MODULE_ID, "shopPackId", pack.collection);
+    } catch (err) {
+      console.error(`${MODULE_ID} | Failed to create the Shop Items compendium`, err);
+      return null;
+    }
   }
+
   if ( pack.locked ) {
     try {
       await pack.configure({locked: false});

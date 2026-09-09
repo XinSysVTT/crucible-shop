@@ -49,6 +49,19 @@ Hooks.once("init", () => {
   // {id, name}. A shop belongs to a folder via its own `folderId` field (see DEFAULT_SHOP-shaped
   // shop objects) rather than the folder holding a list of shop ids, so filing/unfiling a shop is
   // a one-field edit on the shop itself and never needs to touch the folder record.
+  // Collection id (e.g. "world.abc123") of the runtime-created "Shop Items" compendium - see
+  // CrucibleShopManagerApp.#getShopPack(). We create this compendium ourselves the first time
+  // it's needed rather than relying on the pack declared in module.json, because that pack only
+  // exists if a real LevelDB was already sitting on disk at that path when Foundry started - if
+  // the installed copy of the module never had one (fresh checkout, a release that only shipped a
+  // placeholder, etc.) game.packs never registers it, no matter how many times the world restarts.
+  game.settings.register(MODULE_ID, "shopPackId", {
+    scope: "world",
+    config: false,
+    type: String,
+    default: ""
+  });
+
   game.settings.register(MODULE_ID, "shopFolders", {
     scope: "world",
     config: false,
